@@ -2584,6 +2584,7 @@ class Editor:
                 "cards": cards[:5],
                 "defaultCard": cards[0] if cards else None,
                 "icon": "/assets/cards/%s.png" % (cards[0]["cardId"] if cards else ""),
+                "face": "/assets/faces/%s.png" % (cards[0]["cardId"] if cards else ""),
             })
         rows.sort(key=lambda item: (str(item["name"])))
         total = len(rows)

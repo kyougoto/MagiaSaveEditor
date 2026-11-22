@@ -10,7 +10,7 @@
     { id: 'overview', label: '概览' },
     { id: 'resources', label: '资源与状态' },
     { id: 'items', label: '道具' },
-    { id: 'charas', label: '角色与卡片' },
+    { id: 'charas', label: '魔法少女' },
     { id: 'pieces', label: '记忆结晶' },
     { id: 'decks', label: '队伍' },
     { id: 'quests', label: '任务' },
@@ -716,7 +716,7 @@
       render: function (rows) {
         var html = '<div class="grid wide">';
         rows.forEach(function (row) {
-          html += '<div class="tile">' + thumb(row.icon, row.name, 'icon')
+          html += '<div class="tile">' + thumb(row.face || row.icon, row.name, 'faceAvatar')
             + '<div class="name">' + esc(row.name) + '</div>'
             + '<div class="id">#' + esc(row.charaId) + ' · 初始 ' + esc(row.defaultCard ? row.defaultCard.rank : '无卡')
             + '</div>'
@@ -755,7 +755,7 @@
         + ' 名魔法少女（点击卡片进入详细编辑）</span></div><div class="grid wide">';
       data.rows.forEach(function (row) {
         html += '<div class="tile cat" data-chara="' + esc(row.userCardId) + '">'
-          + thumb(row.icon, row.name, 'icon')
+          + thumb(row.face || row.icon, row.name, 'faceAvatar')
           + '<div class="name">' + esc(row.name) + '</div>'
           + '<div class="id">' + esc(row.cardName) + '</div>'
           + '<div class="tags"><span class="tag">' + esc(row.attributeLabel) + '</span>'
@@ -818,7 +818,7 @@
   }
 
   function charaHeader(d, card) {
-    return '<section class="panel charaHead">' + thumb(d.icon, d.name, 'charaFace')
+    return '<section class="panel charaHead">' + thumb(d.face || d.icon, d.name, 'charaFace')
       + '<div><h2>' + esc(d.name) + ' <span class="small">' + esc(d.kana || '') + '</span></h2>'
       + '<p class="small">' + esc(d.attributeLabel) + ' · ' + esc(d.school || '') + ' · '
       + esc(card.cardName || '') + ' #' + esc(card.cardId || '') + '</p>'
@@ -1753,12 +1753,17 @@ function renderCharaDetail() {
     POSITION_VISUAL_ORDER.forEach(function (slot) {
       var item = cells[slot];
       var cls = 'boardCell' + (item ? ' ' + item.kind : '');
-      var label = '';
-      if (item) {
-        label = item.kind === 'helper' ? '支援' : (item.name || '');
+      var inner = '<span class="pos">' + slot + '</span>';
+      if (item && item.userCardId) {
+        inner += '<img class="boardFace" loading="lazy" src="' + esc(item.face || item.icon)
+          + '" alt="' + esc(item.name || '') + '">';
+        inner += '<span class="who">' + esc(item.name || '') + '</span>';
+      } else if (item && item.kind === 'helper') {
+        inner += '<span class="whoCenter">支援</span>';
+      } else {
+        inner += '<span class="whoCenter empty">空位</span>';
       }
-      html += '<div class="' + cls + '"><span class="pos">' + slot + '</span>'
-        + '<span class="who">' + esc(label) + '</span></div>';
+      html += '<div class="' + cls + '">' + inner + '</div>';
     });
     return html + '</div>';
   }

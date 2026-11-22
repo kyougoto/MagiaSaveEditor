@@ -458,3 +458,40 @@ img.faceIcon {
 .statChip .plus { color: #ffd479; font-style: normal; font-size: 11px; }
 .stars { color: #ffd479; font-size: 11px; letter-spacing: 1px; margin-left: 6px; }
 .deckPiece .pieceLv { color: var(--muted); font-size: 11px; white-space: nowrap; }
+/* ---- 站位总览：正方形 + 头像 ---- */
+.deckBoard {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px;
+  max-width: 380px; margin: 10px 0 6px;
+}
+.boardCell {
+  position: relative; aspect-ratio: 1 / 1; border-radius: 12px; overflow: hidden;
+  border: 1px solid var(--line); background: var(--bg-2);
+  display: grid; place-items: center;
+}
+.boardCell .pos {
+  position: absolute; top: 4px; left: 7px; z-index: 2;
+  font-size: 10px; color: var(--muted); background: rgba(0, 0, 0, .45);
+  padding: 0 4px; border-radius: 6px;
+}
+.boardCell .boardFace {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+}
+.boardCell .boardFace.missing { visibility: hidden; }
+.boardCell .who {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
+  padding: 4px 4px 3px; font-size: 11px; text-align: center; color: #fff;
+  background: linear-gradient(transparent, rgba(0, 0, 0, .78));
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.boardCell .whoCenter { font-size: 12px; color: var(--muted); }
+.boardCell .whoCenter.empty { opacity: .6; }
+.boardCell.member { border-color: rgba(180, 108, 255, .55); }
+.boardCell.helper { border-color: rgba(99, 214, 160, .6); border-style: dashed; }
+.boardCell.helper .whoCenter { color: #9fe6c4; }
+.boardCell.empty { opacity: .6; }
+/* ---- 魔法少女一览头像 ---- */
+img.faceAvatar {
+  width: 96px; height: 96px; object-fit: cover; border-radius: 14px;
+  border: 1px solid var(--line); background: #100e17;
+}
+.charaHead img.charaFace { object-fit: cover; border-radius: 14px; }
