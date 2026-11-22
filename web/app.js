@@ -16,7 +16,6 @@
     { id: 'decks', label: '队伍' },
     { id: 'chapters', label: '剧情关卡' },
     { id: 'challenges', label: '挑战' },
-    { id: 'gacha', label: '扭蛋' },
     { id: 'gifts', label: '养成素材（gift）' },
     { id: 'raw', label: '原始 JSON' }
   ];
@@ -220,7 +219,6 @@
       case 'quests': task = renderQuests(); break;
       case 'chapters': task = renderChapters(); break;
       case 'challenges': task = renderChallenges(); break;
-      case 'gacha': task = renderGacha(); break;
       case 'gifts': task = renderGifts(); break;
       case 'raw': task = renderRaw(); break;
       default: task = Promise.resolve();
