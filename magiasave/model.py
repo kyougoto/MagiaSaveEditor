@@ -211,11 +211,17 @@ def diff_paths(before, after, prefix="", out=None):
 
 
 def _int(value, field, minimum=None, maximum=None):
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
         raise ValidationError("%s 必须是整数" % field, code="invalid_value")
-    number = int(value)
-    if number != value:
-        raise ValidationError("%s 必须是整数" % field, code="invalid_value")
+    if isinstance(value, str):
+        text = value.strip()
+        if not re.fullmatch(r"-?\d+", text):
+            raise ValidationError("%s 必须是整数" % field, code="invalid_value")
+        number = int(text)
+    else:
+        number = int(value)
+        if number != value:
+            raise ValidationError("%s 必须是整数" % field, code="invalid_value")
     if minimum is not None and number < minimum:
         raise ValidationError("%s 不能小于 %s" % (field, minimum), code="invalid_value")
     if maximum is not None and number > maximum:
@@ -2207,7 +2213,7 @@ class Editor:
             })
         meta = self.catalog.section(section_id)
         return {
-            "sectionId": section_id,
+            "sectionId": int(section_id) if str(section_id).isdigit() else section_id,
             "title": meta.get("title") or ((rules.get("title") if isinstance(rules, dict) else None)),
             "area": meta.get("area"),
             "questType": meta.get("questType"),
