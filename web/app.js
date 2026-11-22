@@ -382,6 +382,19 @@
       });
       html += '</section>';
 
+      var medals = results[1].groupBattleMedals || [];
+      if (medals.length) {
+        html += '<section class="panel"><h2>心魔奖章（团战奖章） <span class="small">'
+          + medals.length + ' 项</span></h2>'
+          + '<p class="small">每个团战活动一种奖章，改数量即时生效；没有的活动显示 0，填数字即可发放。</p>'
+          + '<details><summary class="small">展开 / 收起各项数量</summary>';
+        medals.forEach(function (row) {
+          html += numberRow({ op: 'item.set', itemId: row.itemId, valueKey: 'quantity', value: row.quantity },
+            row.name + '（活动 ' + row.eventId + '）');
+        });
+        html += '</details></section>';
+      }
+
       html += '<section class="panel"><h2>状态点（AP / BP / CP / RP 与属性强化）</h2>';
       var maxOf = {};
       statusRows.forEach(function (row) {
@@ -607,7 +620,8 @@
           S.itemsNav = {
             family: tile.getAttribute('data-family'),
             familyLabel: tile.querySelector('.name').textContent,
-            group: null
+            group: null,
+            scope: scope
           };
           S.page.items = { offset: 0, q: '', sort: 'id' };
           render();
@@ -648,6 +662,7 @@
           var nav = S.itemsNav || (S.itemsNav = {});
           nav.group = tile.getAttribute('data-group');
           nav.groupLabel = tile.getAttribute('data-label');
+          nav.scope = nav.scope || 'player';
           S.page.items = { offset: 0, q: '', sort: 'id' };
           render();
         });
@@ -2403,11 +2418,12 @@ function renderCharaDetail() {
   }
 
   function openPiecePicker() {
-    var filter = { rank: '', type: '' };
+    var filter = { rank: '', type: '', limit: '' };
     function fetch(query) {
       return api('/api/view/pieces-catalog?limit=200&q=' + encodeURIComponent(query)
         + '&rank=' + encodeURIComponent(filter.rank)
-        + '&type=' + encodeURIComponent(filter.type));
+        + '&type=' + encodeURIComponent(filter.type)
+        + '&limitMode=' + encodeURIComponent(filter.limit));
     }
     openPicker({
       title: '添加记忆结晶',
@@ -2418,6 +2434,11 @@ function renderCharaDetail() {
         var html = '<div class="toolbar"><select data-pick-rank>'
           + selectOptions(data && data.ranks, filter.rank) + '</select>'
           + '<select data-pick-type>' + selectOptions(data && data.types, filter.type, pieceTypeLabel)
+          + '</select>'
+          + '<select data-pick-limit>'
+          + '<option value="">限制：全部</option>'
+          + '<option value="limited"' + (filter.limit === 'limited' ? ' selected' : '') + '>限制：仅限指定角色</option>'
+          + '<option value="free"' + (filter.limit === 'free' ? ' selected' : '') + '>限制：通用</option>'
           + '</select><span class="small">筛选立即生效</span></div><div class="grid wide">';
         rows.forEach(function (row) {
           html += tileHtml(
@@ -2438,6 +2459,13 @@ function renderCharaDetail() {
       },
       bind: function (host, rows) {
         var rankSelect = host.querySelector('[data-pick-rank]');
+        var limitSelect = host.querySelector('[data-pick-limit]');
+        if (limitSelect) {
+          limitSelect.addEventListener('change', function () {
+            filter.limit = limitSelect.value;
+            if (host._reload) { host._reload(); }
+          });
+        }
         if (rankSelect) {
           rankSelect.addEventListener('change', function () {
             filter.rank = rankSelect.value;

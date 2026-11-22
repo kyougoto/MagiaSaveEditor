@@ -2803,9 +2803,21 @@ class Editor:
                 "path": "state.userStatusList[statusId=%s]" % status_id,
             })
         rows.sort(key=lambda row: str(row["statusId"]))
+        item_rows = {str(row.get("itemId")): row for row in self.rows("userItemList")}
+        medals = []
+        for code, meta in sorted((self.catalog.data.get("items") or {}).items()):
+            if not (code.startswith("EVENT_GROUPBATTLE_") and code.endswith("_COIN")):
+                continue
+            row = item_rows.get(code) or {}
+            medals.append({
+                "itemId": code,
+                "name": (meta or {}).get("name") or code,
+                "quantity": int(row.get("quantity") or 0),
+                "eventId": code.split("_")[2] if len(code.split("_")) > 2 else "",
+            })
         user_row = self.state.get("user") or {}
         game_user = self.state.get("gameUser") or {}
-        return {"rows": rows, "player": {
+        return {"rows": rows, "groupBattleMedals": medals, "player": {
             "loginName": user_row.get("loginName"),
             "comment": game_user.get("comment"),
             "userId": game_user.get("userId"),
