@@ -1551,6 +1551,58 @@ class Editor:
     def pieces_detail_catalog(self):
         return self._data("pieces-detail.json", {"pieces": {}})
 
+    MATERIAL_PIECES = (1147, 1148, 1297, 1298)
+
+    def materials_view(self):
+        """结晶强化 / 突破用的素材（记忆结晶回路、限制解除器等），按实例数计量。"""
+        rows = []
+        for piece_id in self.MATERIAL_PIECES:
+            meta = self.catalog.piece(piece_id)
+            instances = [row for row in self.rows("userPieceList")
+                         if str(row.get("pieceId")) == str(piece_id)]
+            rows.append({
+                "pieceId": piece_id,
+                "name": meta.get("name"),
+                "kind": meta.get("kind"),
+                "count": len(instances),
+                "icon": "/assets/pieces/%s.png" % piece_id,
+            })
+        return {"rows": rows}
+
+    def _op_piece_material(self, profile, op, _force, extra):
+        piece_id = _int(op.get("pieceId"), "pieceId", 1)
+        count = _int(op.get("count"), "count", 0, 9999)
+        rows = profile["state"].setdefault("userPieceList", [])
+        instances = [row for row in rows if str(row.get("pieceId")) == str(piece_id)]
+        current = len(instances)
+        if count == current:
+            raise ValidationError("数量没变", code="already_present")
+        if count > current:
+            master = self.masters.piece(piece_id)
+            stamp = self.stamp()
+            for _offset in range(count - current):
+                row = {
+                    "userId": profile["state"]["gameUser"]["userId"],
+                    "id": str(uuid.uuid4()),
+                    "pieceId": piece_id,
+                    "level": 1,
+                    "experience": 0,
+                    "lbCount": 0,
+                    "attack": 0,
+                    "defense": 0,
+                    "hp": 0,
+                    "protect": False,
+                    "archive": 0,
+                    "createdAt": stamp,
+                }
+                if master:
+                    row.update(growth.piece_stats(master, 1, 0))
+                rows.append(row)
+        else:
+            for row in instances[count:]:
+                rows.remove(row)
+        extra.add("state.userPieceList")
+
     def piece_master_view(self, piece_id):
         """结晶的静态信息（未拥有也能看）：描述、技能、基础与满级数值。"""
         detail = (self.pieces_detail_catalog().get("pieces") or {}).get(str(piece_id)) or {}
@@ -2267,8 +2319,10 @@ class Editor:
         by_section = data.get("bySection") or {}
         prereq = data.get("prerequisites") or {}
         nodes = []
+        placed_ids = set()
         for item in layout:
             sid = str(item.get("sectionId"))
+            placed_ids.add(sid)
             section_row = section_rows.get(sid) or {}
             rules = by_section.get(sid) or {}
             quests = []
@@ -2276,9 +2330,10 @@ class Editor:
                 row = quest_rows.get(str(qid)) or {}
                 quests.append({"questBattleId": qid, "present": bool(row),
                                "cleared": row.get("cleared") is True})
+            local = self.catalog.section(item.get("sectionId"))
             nodes.append({
                 "sectionId": item.get("sectionId"),
-                "title": item.get("title"),
+                "title": (local or {}).get("title") or item.get("title"),
                 "x": item.get("x"),
                 "y": item.get("y"),
                 "connect": item.get("connect") or [],
@@ -2291,6 +2346,37 @@ class Editor:
                 "questCount": len(quests),
                 "questCleared": sum(1 for quest in quests if quest["cleared"]),
                 "requires": [int(x) for x in (prereq.get(sid) or [])],
+                "unplaced": False,
+            })
+        # 没有地图坐标的小节也要列出来（游戏里它们不在地图上）
+        for sid_value in chapter.get("sections") or []:
+            sid = str(int(sid_value))
+            if sid in placed_ids:
+                continue
+            section_row = section_rows.get(sid) or {}
+            rules = by_section.get(sid) or {}
+            quests = []
+            for qid in rules.get("requiredQuestIds") or []:
+                row = quest_rows.get(str(qid)) or {}
+                quests.append({"questBattleId": qid, "present": bool(row),
+                               "cleared": row.get("cleared") is True})
+            local = self.catalog.section(int(sid_value))
+            nodes.append({
+                "sectionId": int(sid_value),
+                "title": (local or {}).get("title"),
+                "x": None,
+                "y": None,
+                "connect": [],
+                "iconId": None,
+                "parameter": None,
+                "secret": False,
+                "present": bool(section_row),
+                "canPlay": section_row.get("canPlay"),
+                "cleared": section_row.get("cleared") is True,
+                "questCount": len(quests),
+                "questCleared": sum(1 for quest in quests if quest["cleared"]),
+                "requires": [int(x) for x in (prereq.get(sid) or [])],
+                "unplaced": True,
             })
         if nodes:
             xs = [node["x"] for node in nodes if isinstance(node.get("x"), int)]
@@ -2302,8 +2388,9 @@ class Editor:
             bounds = {"minX": 0, "maxX": 0, "minY": 0, "maxY": 0, "pixel": False}
         return {
             "chapterId": chapter_id,
-            "title": chapter.get("title"),
-            "chapterNoForView": chapter.get("chapterNoForView"),
+            "title": (self.catalog.chapter(chapter_id) or {}).get("title") or chapter.get("title"),
+            "chapterNoForView": (self.catalog.chapter(chapter_id) or {}).get("no")
+            or chapter.get("chapterNoForView"),
             "chapterType": chapter.get("chapterType"),
             "partNo": chapter.get("partNo"),
             "nodeCount": len(nodes),

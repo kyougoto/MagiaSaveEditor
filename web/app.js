@@ -2690,45 +2690,48 @@ function renderCharaDetail() {
     });
   }
 
+// 布局照搬游戏分支地图（LostRecordMap.js）：
+  //   x = (pointX-1)*66 + 20, y = (pointY-1)*48 + 20, 节点 150x94
+  //   连线 (x+60, y+35) -> ((tx-1)*66+80, (ty-1)*48+55)
+  var MAP_CELL_W = 66, MAP_CELL_H = 48, MAP_PAD = 20, MAP_NODE_W = 150, MAP_NODE_H = 94;
+
   function chapterTreeHtml(map) {
-    var nodes = map.nodes || [];
-    if (!nodes.length) { return '<p class="small">这一章没有坐标数据，无法画树。</p>'; }
-    var b = map.bounds || { minX: 0, maxX: 1, minY: 0, maxY: 1 };
-    var cellW = 128, cellH = 96, pad = 48;
-    var xs = [], ys = [];
-    nodes.forEach(function (node) {
-      if (xs.indexOf(node.x) < 0) { xs.push(node.x); }
-      if (ys.indexOf(node.y) < 0) { ys.push(node.y); }
-    });
-    xs.sort(function (a, b2) { return a - b2; });
-    ys.sort(function (a, b2) { return a - b2; });
-    var cols = Math.max(1, xs.length);
-    var rows = Math.max(1, ys.length);
-    var w = cols * cellW + pad * 2;
-    var h = rows * cellH + pad * 2;
+    var nodes = (map.nodes || []).filter(function (node) { return !node.unplaced; });
+    if (!nodes.length) { return '<p class="small">这一章没有地图坐标。</p>'; }
+    if ((map.bounds || {}).pixel) {
+      return '<p class="small">这一章的坐标是像素级的（单人 raid 结构），游戏里不是树状地图，请用下面的小节列表。</p>';
+    }
     var byId = {};
     nodes.forEach(function (node) { byId[String(node.sectionId)] = node; });
-    function cx(node) { return pad + xs.indexOf(node.x) * cellW + cellW / 2; }
-    function cy(node) { return pad + ys.indexOf(node.y) * cellH + cellH / 2; }
-    var svg = '<svg class="chapterTree" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h
-      + '" preserveAspectRatio="xMinYMin meet"><g>';
+    function px(node) { return (node.x - 1) * MAP_CELL_W + MAP_PAD; }
+    function py(node) { return (node.y - 1) * MAP_CELL_H + MAP_PAD; }
+    var maxX = 0, maxY = 0;
+    nodes.forEach(function (node) {
+      maxX = Math.max(maxX, px(node) + MAP_NODE_W);
+      maxY = Math.max(maxY, py(node) + MAP_NODE_H);
+    });
+    var edges = '';
     nodes.forEach(function (node) {
       (node.connect || []).forEach(function (targetId) {
         var target = byId[String(targetId)];
         if (!target) { return; }
-        svg += '<line class="treeLink' + (node.cleared ? ' on' : '') + '" x1="' + cx(node) + '" y1="' + cy(node)
-          + '" x2="' + cx(target) + '" y2="' + cy(target) + '"/>';
+        edges += '<line x1="' + (px(node) + 60) + '" y1="' + (py(node) + 35)
+          + '" x2="' + (px(target) + 80) + '" y2="' + (py(target) + 55) + '"'
+          + (node.cleared ? ' class="on"' : '') + '/>';
       });
     });
+    var html = '<div class="lr-map-scroll"><div class="lr-map-canvas" style="width:' + maxX + 'px;height:' + maxY + 'px">'
+      + '<svg class="lr-map-edges" width="' + maxX + '" height="' + maxY + '">' + edges + '</svg>';
     nodes.forEach(function (node) {
-      var cls = 'treeNode' + (node.cleared ? ' cleared' : (node.canPlay ? ' open' : ''));
-      if (node.secret) { cls += ' secret'; }
-      svg += '<g class="' + cls + '" data-tree-node="' + esc(node.sectionId) + '" transform="translate('
-        + cx(node) + ',' + cy(node) + ')"><rect x="-50" y="-28" width="100" height="56" rx="9"/>'
-        + '<text class="t" y="-6">' + esc((node.title || '').slice(0, 9)) + '</text>'
-        + '<text class="s" y="14">' + esc(node.questCleared) + '/' + esc(node.questCount) + '</text></g>';
+      var cls = 'lr-map-node' + (node.cleared ? ' lr-clear' : (node.canPlay ? ' lr-new' : ' lr-locked'));
+      var status = node.cleared ? 'CLEAR' : (node.canPlay ? 'NEW' : '未解锁');
+      html += '<button type="button" class="' + cls + '" data-tree-node="' + esc(node.sectionId)
+        + '" style="left:' + px(node) + 'px;top:' + py(node) + 'px" title="'
+        + esc(node.sectionId + ' · ' + (node.questCleared + '/' + node.questCount)) + '">'
+        + '<span class="lr-node-label">' + esc(node.title || '') + '</span>'
+        + '<span class="lr-node-status">' + esc(status) + '</span></button>';
     });
-    return svg + '</g></svg>';
+    return html + '</div></div>';
   }
 
   function renderChapterMap() {

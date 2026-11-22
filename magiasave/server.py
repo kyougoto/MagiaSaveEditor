@@ -249,6 +249,8 @@ class Handler(BaseHTTPRequestHandler):
                                                          query.get("limit"), query.get("charaId"))}
             if name == "piece":
                 return {"ok": True, **editor.piece_detail(query.get("id"))}
+            if name == "materials":
+                return {"ok": True, **editor.materials_view()}
             if name == "piece-master":
                 return {"ok": True, **editor.piece_master_view(query.get("pieceId"))}
             if name == "decks":

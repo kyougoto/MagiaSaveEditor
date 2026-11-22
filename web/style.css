@@ -596,3 +596,29 @@ svg.chapterTree {
   background: radial-gradient(circle at 30% 30%, #171325 0%, #0d0b13 75%);
   border: 1px solid var(--line); border-radius: 12px; display: block; margin: 10px 0;
 }
+/* ---- 分支地图：几何照搬游戏 LostRecordMap.js（格 66x48，节点 150x94） ---- */
+.lr-map-scroll {
+  overflow: auto; max-height: 660px; margin: 10px 0;
+  border: 1px solid var(--line); border-radius: 12px;
+  background: radial-gradient(circle at 30% 25%, #171325 0%, #0d0b13 78%);
+}
+.lr-map-canvas { position: relative; }
+svg.lr-map-edges { position: absolute; left: 0; top: 0; pointer-events: none; }
+svg.lr-map-edges line { stroke: #3a3350; stroke-width: 3; }
+svg.lr-map-edges line.on { stroke: #8f6bd6; }
+button.lr-map-node {
+  position: absolute; width: 150px; height: 94px; box-sizing: border-box;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  padding: 8px; border-radius: 12px; cursor: pointer;
+  border: 1px solid #4b4166; background: #1d1830; color: var(--text);
+}
+button.lr-map-node .lr-node-label {
+  font-size: 13px; line-height: 1.25; text-align: center; max-height: 34px; overflow: hidden;
+}
+button.lr-map-node .lr-node-status { font-size: 11px; color: var(--muted); }
+button.lr-map-node.lr-clear { border-color: #b46cff; background: #2a1f45; }
+button.lr-map-node.lr-clear .lr-node-status { color: #d9c2ff; }
+button.lr-map-node.lr-new { border-color: #63d6a0; border-style: dashed; }
+button.lr-map-node.lr-new .lr-node-status { color: #9fe6c4; }
+button.lr-map-node.lr-locked { opacity: .55; }
+button.lr-map-node:hover { border-color: #ffd479; }

@@ -88,6 +88,14 @@ def main(argv=None):
             "chapterId": None,
         }
 
+    # 章归属按 sectionId 编码规则：(101801 // 100) % 100 = 18 → 第 8 章
+    for key, row in tables["section"].items():
+        sid = as_int(row.get("sectionId") or key)
+        if not sid:
+            continue
+        chapter_id = (sid // 100) % 100
+        chapter_sections.setdefault(str(chapter_id), set()).add(sid)
+
     chapters = {}
     chapter_table = tables.get("chapter") or {}
     for key, row in chapter_table.items():
