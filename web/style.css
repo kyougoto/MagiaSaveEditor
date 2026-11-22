@@ -502,3 +502,12 @@ img.faceAvatar {
 }
 .previewBox .small { line-height: 1.55; }
 .previewBox .pieceDesc { margin: 2px 0; white-space: pre-wrap; }
+/* ---- 结晶预览弹窗 ---- */
+#previewModal .panel { width: min(560px, 92vw); }
+#previewModal .body { display: grid; gap: 6px; }
+.previewHead { display: flex; gap: 12px; align-items: center; margin-bottom: 4px; }
+.previewHead img.icon {
+  width: 64px; height: 64px; object-fit: contain; border-radius: 10px;
+  background: #100e17; border: 1px solid var(--line);
+}
+.previewHead .name { font-size: 14px; font-weight: 600; }

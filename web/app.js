@@ -1537,12 +1537,8 @@ function renderCharaDetail() {
                 }).join('')
               + (row.decks || []).map(deckTagHtml).join('') + '</div>'
             : '')
-          + '<div class="row"><input data-piece-level type="number" min="1" max="' + esc(row.maxLevel || 50) + '" value="'
-            + esc(row.level) + '"' + (row.editable ? '' : ' disabled') + '>'
-            + '<span class="small">lv / ' + esc(row.maxLevel || '?') + '</span></div>'
-          + '<div class="row"><input data-piece-lb type="number" min="0" max="4" value="' + esc(row.lbCount) + '">'
-            + '<span class="small">突破</span>'
-            + '<button class="mini" data-piece-del>移出</button></div>'
+          + '<div class="row"><span class="tag">Lv ' + esc(row.level) + ' / ' + esc(row.maxLevel || '?') + '</span>'
+          + '<span class="tag">突破 ' + esc(row.lbCount) + ' / 4</span></div>'
           + statLine([['HP', row.hp]])
           + statLine([['攻击', row.attack]])
           + statLine([['防御', row.defense]])
@@ -1584,23 +1580,6 @@ function renderCharaDetail() {
           render();
         });
       }
-      var rows = data.rows;
-      $('main').querySelectorAll('[data-piece-level]').forEach(function (input, index) {
-        input.addEventListener('change', function () {
-          edit([{ op: 'piece.set', id: rows[index].id, field: 'level', value: Number(input.value) }]);
-        });
-      });
-      $('main').querySelectorAll('[data-piece-lb]').forEach(function (input, index) {
-        input.addEventListener('change', function () {
-          edit([{ op: 'piece.set', id: rows[index].id, field: 'lbCount', value: Number(input.value) }]);
-        });
-      });
-      $('main').querySelectorAll('[data-piece-del]').forEach(function (button, index) {
-        button.addEventListener('click', function () {
-          if (!window.confirm('把这枚结晶移出存档？')) { return; }
-          edit([{ op: 'piece.delete', id: rows[index].id }]);
-        });
-      });
       $('main').querySelectorAll('[data-piece]').forEach(function (tile) {
         tile.addEventListener('click', function (event) {
           if (event.target.closest('input, button')) { return; }
@@ -1649,7 +1628,8 @@ function renderCharaDetail() {
       html += '<section class="panel"><h2>等级与突破 <span class="tag ok">可回退</span></h2>'
         + pieceFieldHtml('等级（上限 ' + (d.maxLevel || '?') + '）', 'level', d.level, d.editable, d.maxLevel || 50)
         + pieceFieldHtml('突破（0-4）', 'lbCount', d.lbCount, d.editable, 4)
-        + '<p class="small">HP / 攻击 / 防御由等级与突破按游戏公式推算，不能直接改。</p></section>';
+        + '<p class="small">HP / 攻击 / 防御由等级与突破按游戏公式推算，不能直接改。</p>'
+        + '<div class="row"><button class="mini" data-piece-remove>移出这枚结晶</button></div></section>';
 
       if ((d.skills || []).length) {
         html += '<section class="panel"><h2>技能</h2>';
@@ -1689,6 +1669,14 @@ function renderCharaDetail() {
         S.pieceSel = null;
         render();
       });
+      var removeButton = $('main').querySelector('[data-piece-remove]');
+      if (removeButton) {
+        removeButton.addEventListener('click', function () {
+          if (!window.confirm('把这枚结晶移出存档？')) { return; }
+          S.pieceSel = null;
+          edit([{ op: 'piece.delete', id: d.id }]);
+        });
+      }
       $('main').querySelectorAll('[data-piece-apply]').forEach(function (button) {
         button.addEventListener('click', function () {
           var field = button.getAttribute('data-piece-apply');
@@ -2291,9 +2279,33 @@ function renderCharaDetail() {
     });
   }
 
+  function closePreview() {
+    var node = document.getElementById('previewModal');
+    if (node) { node.parentNode.removeChild(node); }
+  }
+
+  function openPreview(title, html) {
+    closePreview();
+    var host = document.createElement('div');
+    host.id = 'previewModal';
+    host.className = 'modal show';
+    host.innerHTML = '<div class="panel" role="dialog" aria-modal="true">'
+      + '<div class="head"><strong>' + esc(title) + '</strong><span class="spacer"></span>'
+      + '<button class="ghost mini" data-preview-close>关闭</button></div>'
+      + '<div class="body">' + html + '</div></div>';
+    document.body.appendChild(host);
+    host.addEventListener('click', function (event) {
+      if (event.target === host) { closePreview(); }
+      else if (event.target.closest('[data-preview-close]')) { closePreview(); }
+    });
+  }
+
   function piecePreviewHtml(d) {
-    var html = '<div class="small">' + esc(pieceTypeLabel(d.type)) + ' · ' + esc(d.rank || '')
-      + (d.attribute ? ' · ' + esc(d.attribute) : '') + '</div>';
+    var html = '<div class="previewHead">'
+      + '<img class="icon" src="/assets/pieces/' + esc(d.pieceId) + '.png" alt="">'
+      + '<div><div class="name">' + esc(d.name || '') + '</div>'
+      + '<div class="small">' + esc(pieceTypeLabel(d.type)) + ' · ' + esc(d.rank || '')
+      + (d.attribute ? ' · ' + esc(d.attribute) : '') + '</div></div></div>';
     if (d.base) {
       html += '<div class="small">基础：HP ' + fmt(d.base.hp) + ' / 攻 ' + fmt(d.base.attack)
         + ' / 防 ' + fmt(d.base.defense) + '</div>';
@@ -2375,15 +2387,9 @@ function renderCharaDetail() {
         });
         host.querySelectorAll('[data-preview]').forEach(function (button) {
           button.addEventListener('click', function () {
-            var tileEl = button.closest('.tile');
-            var box = tileEl.querySelector('.previewBox');
-            if (box) { box.parentNode.removeChild(box); return; }
             api('/api/view/piece-master?pieceId=' + encodeURIComponent(button.getAttribute('data-preview')))
               .then(function (detail) {
-                var div = document.createElement('div');
-                div.className = 'previewBox';
-                div.innerHTML = piecePreviewHtml(detail);
-                tileEl.appendChild(div);
+                openPreview(detail.name || ('结晶 ' + detail.pieceId), piecePreviewHtml(detail));
               }).catch(fail);
           });
         });
@@ -2943,7 +2949,9 @@ function renderCharaDetail() {
       if (event.target === $('modal')) { closeModal(); }
     });
     document.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape' && $('modal').classList.contains('show')) { closeModal(); }
+      if (event.key !== 'Escape') { return; }
+      if (document.getElementById('previewModal')) { closePreview(); return; }
+      if ($('modal').classList.contains('show')) { closeModal(); }
     });
     // 选中条目后立即收起选择器（委托一次，picker 重开不会叠加监听）。
     $('modalBody').addEventListener('click', function (event) {
