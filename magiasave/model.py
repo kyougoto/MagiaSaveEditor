@@ -2769,7 +2769,15 @@ class Editor:
                 "path": "state.userStatusList[statusId=%s]" % status_id,
             })
         rows.sort(key=lambda row: str(row["statusId"]))
-        return {"rows": rows}
+        user_row = self.state.get("user") or {}
+        game_user = self.state.get("gameUser") or {}
+        return {"rows": rows, "player": {
+            "loginName": user_row.get("loginName"),
+            "comment": game_user.get("comment"),
+            "userId": game_user.get("userId"),
+            "level": game_user.get("level"),
+            "riche": game_user.get("riche"),
+        }}
 
     # ------------------------------------------------------------ 多级分组（部 → 章 → 话 → 任务）
 
@@ -3184,6 +3192,30 @@ class Editor:
                 raise ValidationError("%s 必须是字符串" % field, code="invalid_value")
         game_user[field] = value
         extra.add("state.gameUser." + field)
+
+    def _op_player_set(self, profile, op, _force, extra):
+        """昵称在 state.user.loginName，个人简介在 gameUser.comment；ID 之类不允许改。"""
+        field = op.get("field")
+        value = op.get("value")
+        if field == "loginName":
+            target = profile["state"].setdefault("user", {})
+            if not isinstance(value, str) or not value.strip():
+                raise ValidationError("昵称不能为空", code="invalid_value")
+            if len(value) > 24:
+                raise ValidationError("昵称最长 24 个字符", code="invalid_value")
+            target["loginName"] = value.strip()
+            extra.add("state.user.loginName")
+            return
+        if field == "comment":
+            target = profile["state"]["gameUser"]
+            if not isinstance(value, str):
+                raise ValidationError("简介必须是字符串", code="invalid_value")
+            if len(value) > 200:
+                raise ValidationError("简介最长 200 个字符", code="invalid_value")
+            target["comment"] = value
+            extra.add("state.gameUser.comment")
+            return
+        raise ValidationError("不允许修改玩家字段: %r" % (field,), code="protected_path")
 
     def _op_money_set(self, profile, op, _force, extra):
         kind = op.get("kind")

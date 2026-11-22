@@ -360,7 +360,12 @@
       var data = results[0];
       var statusRows = results[1].rows;
       var currency = data.currency;
-      var html = '<section class="panel"><h2>货币 / 关键资源</h2><p class="small">'
+      var player = results[1].player || {};
+      var html = '<section class="panel"><h2>玩家</h2>'
+        + textField({ op: 'player.set', field: 'loginName', valueKey: 'value', value: player.loginName }, '昵称（user.loginName）')
+        + textField({ op: 'player.set', field: 'comment', valueKey: 'value', value: player.comment }, '简介（gameUser.comment）')
+        + '<p class="small">玩家 ID 是 ' + esc(player.userId) + '（不可修改）。</p></section>';
+      html += '<section class="panel"><h2>货币 / 关键资源</h2><p class="small">'
         + '名称取自官方主数据；修改后即时写入内存，点右上「另存为…」才产出新存档。</p>';
       var money = [
         ['riche', '金币（gameUser.riche）', currency.riche],
@@ -383,16 +388,18 @@
         if (row.maxOf) { maxOf[row.maxOf] = row.statusId; }
       });
       statusRows.forEach(function (row) {
+        // MAX_* 只是主项的上限，显示在主行的「上限」里，不再单独成行
+        if (String(row.statusId).indexOf('MAX_') === 0) { return; }
         var spec = { op: 'status.set', statusId: row.statusId, valueKey: 'point' };
-        var isMax = String(row.statusId).indexOf('MAX_') === 0;
+        var maxRow = row.maxOf
+          ? statusRows.filter(function (item) { return item.statusId === row.maxOf; })[0]
+          : null;
         var html2 = '<div class="fieldRow" data-spec=\'' + esc(JSON.stringify(spec)) + '\'>'
           + '<label>' + esc(row.statusId) + ' · ' + esc(row.label) + '</label>'
           + '<input data-field type="number" min="0" value="' + esc(row.point) + '">';
-        if (!isMax) {
-          var maxId = row.maxOf;
-          var maxRow = statusRows.filter(function (item) { return item.statusId === maxId; })[0];
+        if (maxRow) {
           html2 += '<span class="small">上限</span><input data-max-field type="number" min="0" value="'
-            + esc(maxRow ? maxRow.point : '') + '">';
+            + esc(maxRow.point) + '">';
         }
         html2 += '<button class="mini" data-apply>应用</button></div>';
         html += html2;
@@ -404,6 +411,12 @@
       $('main').innerHTML = html;
       bindNumberRows($('main'), function (spec, row) {
         var input = row.querySelector('[data-field]');
+        if (input && input.type === 'text') {
+          var textOp = JSON.parse(JSON.stringify(spec));
+          textOp[spec.valueKey || 'value'] = input.value;
+          edit([textOp]);
+          return;
+        }
         var value = Number(input.value);
         if (!isFinite(value) || value < 0) { fail(new Error('请输入非负整数')); return; }
         var op = JSON.parse(JSON.stringify(spec));
@@ -427,6 +440,14 @@
         });
       });
     });
+  }
+
+  function textField(spec, label) {
+    return '<div class="fieldRow" data-spec=\'' + esc(JSON.stringify(spec)) + '\'>'
+      + '<label>' + esc(label) + '</label>'
+      + '<input data-field type="text" value="'
+      + esc(spec.value === null || spec.value === undefined ? '' : spec.value) + '">'
+      + '<button class="mini" data-apply>应用</button></div>';
   }
 
   function numberRow(spec, label, extra) {
