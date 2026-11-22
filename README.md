@@ -398,4 +398,5 @@ java tools/VerifyArchive.java _work/server-out.zip   # 编辑后存档
 - 玩法逻辑（成长曲线、属性强化、精神强化、队伍编成、剧情解锁等）移植自 MAGIA 复刻工程的 GPL-3.0 源码；
 - 主数据、素材图与文本取自游戏安装包，仅用于本地分析与存档编辑；
 - 分发衍生作品时须同样以 GPL-3.0 开源，并保留本许可与版权声明。
+- 游戏素材与主数据、运行时与打包工具的归属见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
 
