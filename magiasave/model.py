@@ -51,6 +51,9 @@ _ALLOWED_PATTERNS = [
     r"^state\.userQuestBattleList\[\d+\]\.(cleared|clearCount|rewardDone|missionStatus1|missionStatus2|missionStatus3)$",
     r"^state\.userSectionList\[\d+\]\.(canPlay|cleared)$",
     r"^state\.userChapterList(\[\d+\]\.(chapterId|cleared|canPlay|userId|createdAt))?$",
+    r"^battleSession$",
+    r"^battleReceipts$",
+    r"^state\.gameUser\.userQuestBattleResultId$",
     r"^state\.userGiftList(\[\d+\])?(\.(quantity|total))?$",
     r"^state\.user(Daily|Limited|Total|Doppel)ChallengeList\[\d+\]\.(clearedCount|clearedAt|count)$",
     r"^state\.userGachaKindList\[\d+\]\.(totalCount|dailyCount|weeklyCount|monthlyCount)$",
@@ -293,8 +296,30 @@ class Editor:
             row = items.get(code) or {}
             return row.get("quantity")
 
+        session = self.profile.get("battleSession")
+        battle = {
+            "stuck": bool(session) or bool(game_user.get("userQuestBattleResultId")),
+            "resultId": game_user.get("userQuestBattleResultId"),
+            "receiptCount": len(self.profile.get("battleReceipts") or []),
+        }
+        if isinstance(session, dict):
+            record = session.get("record") or {}
+            quest_id = record.get("questBattleId")
+            quest = (self.quest_catalog().get("quests") or {}).get(str(quest_id)) or {}
+            section_id = quest.get("sectionId")
+            meta = self.catalog.section(section_id) if section_id else {}
+            battle.update({
+                "sessionId": session.get("id"),
+                "phase": session.get("phase"),
+                "intent": session.get("intent"),
+                "questBattleId": quest_id,
+                "questName": meta.get("title") if isinstance(meta, dict) else None,
+                "createdAt": record.get("createdAt"),
+            })
+
         return {
             "archive": self.archive.summary(),
+            "battle": battle,
             "player": {
                 "loginName": user.get("loginName"),
                 "userId": game_user.get("userId"),
@@ -2753,6 +2778,25 @@ class Editor:
             rows.sort(key=lambda item: (item.get("challengeId") or 0))
             out.append({"table": table, "label": label, "total": len(rows), "rows": rows})
         return {"groups": out, "hiddenUnknown": hidden, "withoutTarget": without_target}
+
+    def _op_battle_clear(self, profile, op, _force, extra):
+        """脱战：清掉进行中的战斗会话与待结算的战斗结果 id，不动已结算记录与奖励。
+
+        死档常见原因就是异常退出后 battleSession 与 userQuestBattleResultId 残留，
+        游戏每次启动都要求续战或结算。
+        """
+        session = profile.get("battleSession")
+        result_id = (profile.get("state", {}).get("gameUser") or {}).get("userQuestBattleResultId")
+        if not session and not result_id:
+            raise ValidationError("当前没有进行中的战斗", code="no_pending_battle")
+        profile["battleSession"] = None
+        extra.add("battleSession")
+        if result_id:
+            profile["state"]["gameUser"]["userQuestBattleResultId"] = None
+            extra.add("state.gameUser.userQuestBattleResultId")
+        if op.get("clearReceipts"):
+            profile["battleReceipts"] = []
+            extra.add("battleReceipts")
 
     def gifts_view(self):
         """gift 是养成素材：全部已实装素材都列出（未拥有显示 0），按官方 ID 段分组。"""

@@ -327,6 +327,14 @@
         ['profile 字节', archive.profileBytes], ['存储编码', archive.encoding || 'raw']]);
       html += '</div>';
 
+      html += '<section class="panel"><h2>脱战'
+        + (data.battle && data.battle.stuck ? ' <span class="tag warn">有未完成的战斗</span>' : '')
+        + '</h2><p class="small">异常退出或战斗中断后，存档里可能残留未完成的战斗'
+        + '（<code>battleSession</code> 与 <code>gameUser.userQuestBattleResultId</code>），'
+        + '游戏会反复要求续战甚至进不去。点下面按钮把这次战斗清掉：只丢掉未完成的那一场，'
+        + '已结算的战斗记录、奖励与关卡进度都不动。</p>'
+        + '<div class="row"><button class="mini" data-battle-clear>清除未完成战斗（脱战）</button></div></section>';
+
       html += '<section class="panel"><h2>只读与推算规则</h2><p class="small">'
         + '卡片与记忆结晶的 attack / defense / hp 由等级、突破按游戏公式推算，不能直接改；'
         + '以下集合本编辑器完全不动：' + esc((data.readonly.collections || []).join('、')) + '</p>'
@@ -422,6 +430,13 @@
         + '<button data-preset="arena">CP / RP 拉满</button></div></section>';
 
       $('main').innerHTML = html;
+      var battleClear = $('main').querySelector('[data-battle-clear]');
+      if (battleClear) {
+        battleClear.addEventListener('click', function () {
+          if (!window.confirm('清除这次未完成的战斗？已结算记录与奖励不受影响。')) { return; }
+          edit([{ op: 'battle.clear' }]);
+        });
+      }
       bindNumberRows($('main'), function (spec, row) {
         var input = row.querySelector('[data-field]');
         if (input && input.type === 'text') {
