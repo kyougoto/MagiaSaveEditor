@@ -1551,7 +1551,40 @@ class Editor:
     def pieces_detail_catalog(self):
         return self._data("pieces-detail.json", {"pieces": {}})
 
-    def pieces_view(self, query=None, offset=0, limit=200, rank=None, piece_type=None):
+    def piece_master_view(self, piece_id):
+        """结晶的静态信息（未拥有也能看）：描述、技能、基础与满级数值。"""
+        detail = (self.pieces_detail_catalog().get("pieces") or {}).get(str(piece_id)) or {}
+        meta = self.catalog.piece(piece_id)
+        master = self.masters.piece(piece_id)
+        cap = None
+        stats_max = None
+        if master:
+            try:
+                cap = growth.piece_max_level(master.get("rank"), 0)
+                stats_max = growth.piece_stats(master, cap, 0)
+            except growth.GrowthError:
+                cap = None
+        return {
+            "pieceId": int(piece_id) if str(piece_id).isdigit() else piece_id,
+            "name": detail.get("name") or meta.get("name"),
+            "rank": detail.get("rank") or meta.get("rank"),
+            "type": detail.get("type") or meta.get("type"),
+            "kind": detail.get("kind") or meta.get("kind"),
+            "attribute": detail.get("attribute") or meta.get("attribute"),
+            "description": detail.get("description") or meta.get("description"),
+            "limitCharaIds": detail.get("limitCharaIds") or [],
+            "limitCharaNames": [self.catalog.chara_name(cid) for cid in (detail.get("limitCharaIds") or [])],
+            "skills": [
+                dict(skill, unlockAt=(None if index == 0 else 4))
+                for index, skill in enumerate(detail.get("skills") or [])
+            ],
+            "base": master,
+            "maxLevel": cap,
+            "statsAtMax": stats_max,
+        }
+
+    def pieces_view(self, query=None, offset=0, limit=200, rank=None, piece_type=None,
+                    limit_mode=None, chara_id=None):
         rows = []
         index = self.deck_index()
         for row in self.rows("userPieceList"):
@@ -1564,9 +1597,13 @@ class Editor:
                     cap = growth.piece_max_level(master.get("rank"), row.get("lbCount") or 0)
                 except growth.GrowthError:
                     cap = None
+            detail = (self.pieces_detail_catalog().get("pieces") or {}).get(str(piece_id)) or {}
+            limit_ids = detail.get("limitCharaIds") or []
             rows.append({
                 "id": row.get("id"),
                 "pieceId": piece_id,
+                "limitCharaIds": limit_ids,
+                "limitCharaNames": [self.catalog.chara_name(cid) for cid in limit_ids],
                 "name": meta.get("name"),
                 "type": meta.get("type"),
                 "kind": meta.get("kind"),
@@ -1596,6 +1633,14 @@ class Editor:
             rows = [row for row in rows if str(row.get("rank")) == str(rank)]
         if piece_type:
             rows = [row for row in rows if str(row.get("type")) == str(piece_type)]
+        if limit_mode == "limited":
+            rows = [row for row in rows if row.get("limitCharaIds")]
+        elif limit_mode == "free":
+            rows = [row for row in rows if not row.get("limitCharaIds")]
+        if chara_id:
+            rows = [row for row in rows
+                    if not row.get("limitCharaIds")
+                    or str(chara_id) in [str(item) for item in row["limitCharaIds"]]]
         rows.sort(key=lambda row: (row.get("pieceId") or 0))
         return {"total": len(rows), "offset": offset, "limit": limit, "rows": rows[offset: offset + limit],
                 "ranks": ranks, "types": types}
@@ -1627,7 +1672,14 @@ class Editor:
             "attribute": detail.get("attribute"),
             "description": detail.get("description") or meta.get("description"),
             "illustrator": detail.get("illustrator"),
-            "skills": detail.get("skills") or [],
+            "limitCharaIds": detail.get("limitCharaIds") or [],
+            "limitCharaNames": [self.catalog.chara_name(cid) for cid in (detail.get("limitCharaIds") or [])],
+            "skills": [
+                dict(skill, unlockAt=(None if index == 0 else 4),
+                     active=(index == (1 if int(row.get("lbCount") or 0) >= 4 else 0)))
+                for index, skill in enumerate(detail.get("skills") or [])
+            ],
+            "activeSkillIndex": 1 if int(row.get("lbCount") or 0) >= 4 else 0,
             "level": row.get("level"),
             "maxLevel": cap,
             "experience": row.get("experience"),
@@ -1839,7 +1891,8 @@ class Editor:
             })
         decks.sort(key=lambda item: (item["deckType"] if isinstance(item["deckType"], int) else 99))
         return {"decks": decks, "total": len(decks)}
-    def piece_catalog(self, query=None, offset=0, limit=50, rank=None, piece_type=None):
+    def piece_catalog(self, query=None, offset=0, limit=50, rank=None, piece_type=None,
+                      limit_mode=None, chara_id=None):
         """全部已实装记忆结晶（可添加）。结晶可重复获取，因此只报已有数量，不阻止再添加。"""
         owned_count = {}
         for row in self.rows("userPieceList"):
@@ -1860,9 +1913,19 @@ class Editor:
             if not master:
                 # 缺成长数据的结晶无法添加，也无法推算数值
                 continue
+            detail = (self.pieces_detail_catalog().get("pieces") or {}).get(str(key)) or {}
+            limit_ids = detail.get("limitCharaIds") or []
+            if limit_mode == "limited" and not limit_ids:
+                continue
+            if limit_mode == "free" and limit_ids:
+                continue
+            if chara_id and limit_ids and str(chara_id) not in [str(item) for item in limit_ids]:
+                continue
             rows.append({
                 "pieceId": int(key) if key.isdigit() else key,
                 "name": name,
+                "limitCharaIds": limit_ids,
+                "limitCharaNames": [self.catalog.chara_name(cid) for cid in limit_ids],
                 "type": row.get("type"),
                 "rank": row.get("rank"),
                 "attribute": row.get("attribute"),

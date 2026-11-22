@@ -13,6 +13,8 @@
   <APK_DATA>/files/magica/js/libs/missionChallengeMap.json 挑战任务文本
   <APK_DATA>/files/magica/js/libs/emotionSkillMap.json 情感技能（精神树）
 
+可选：--full-catalog 指向 APK 的 MCATBIN1 catalog，用 tables.chara / tables.card 补齐 libs 里缺的属性。
+
 用法：
   python tools/build_catalog.py --libs "H:/magia_server/io.kamihama.totentanz/files/magica/js/libs"       --out data/catalog.json
 """
@@ -32,7 +34,19 @@ def load_json(path, default=None):
         return default
 
 
-def build(libs_dir):
+def load_master_tables(full_catalog_path):
+    """读 MCATBIN1 的 tables.chara / tables.card，用来补 libs 缺的字段。"""
+    if not full_catalog_path or not os.path.isfile(full_catalog_path):
+        return {}, {}
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from parse_compact_catalog import CompactCatalog
+    with open(full_catalog_path, "rb") as handle:
+        root = CompactCatalog(handle.read()).root_value()
+    tables = root.get("tables") or {}
+    return tables.get("chara") or {}, tables.get("card") or {}, tables.get("piece") or {}
+
+
+def build(libs_dir, full_catalog_path=None):
     items = load_json(os.path.join(libs_dir, "itemList.json"), []) or []
     chara = load_json(os.path.join(libs_dir, "charaList.json"), []) or []
     cards = load_json(os.path.join(libs_dir, "cardList.json"), []) or []
@@ -71,16 +85,39 @@ def build(libs_dir):
             if row.get(key):
                 entry[out] = row[key]
         catalog["items"][code] = entry
+    master_chara, master_cards, master_pieces = load_master_tables(full_catalog_path)
+    # 卡片上的属性作为第二保险：同一角色的卡属性一致
+    card_attribute = {}
+    for row in master_cards.values():
+        if not isinstance(row, dict):
+            continue
+        chara_no = row.get("charaNo")
+        attribute = row.get("attributeId")
+        if chara_no is not None and attribute:
+            card_attribute.setdefault(str(int(chara_no)), attribute)
     for row in chara:
         key = row.get("id")
         if key is None:
             continue
+        attribute = row.get("attributeId")
+        title = row.get("title")
+        school = row.get("school")
+        initial = row.get("initialType")
+        master = master_chara.get(str(key)) or {}
+        if not attribute:
+            attribute = master.get("attributeId") or card_attribute.get(str(key))
+        if not title:
+            title = master.get("title")
+        if not school:
+            school = master.get("school")
+        if not initial:
+            initial = master.get("initialType")
         catalog["chara"][str(key)] = {
             "name": row.get("name") or str(key),
-            "attribute": row.get("attributeId"),
-            "school": row.get("school"),
-            "title": row.get("title"),
-            "initialType": row.get("initialType"),
+            "attribute": attribute,
+            "school": school,
+            "title": title,
+            "initialType": initial,
         }
     for row in cards:
         key = row.get("cardId")
@@ -94,12 +131,13 @@ def build(libs_dir):
         key = row.get("pieceId")
         if key is None:
             continue
+        master = master_pieces.get(str(key)) or {}
         catalog["pieces"][str(key)] = {
             "name": row.get("pieceName") or str(key),
-            "type": row.get("pieceType"),
-            "kind": row.get("pieceKind"),
-            "attribute": row.get("attributeId"),
-            "rank": row.get("rank"),
+            "type": row.get("pieceType") or master.get("pieceType"),
+            "kind": row.get("pieceKind") or master.get("pieceKind"),
+            "attribute": row.get("attributeId") or master.get("attributeId"),
+            "rank": row.get("rank") or master.get("rank"),
         }
     for row in gifts:
         key = row.get("id")
@@ -158,8 +196,9 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="构建编辑器主数据索引")
     parser.add_argument("--libs", required=True, help="客户端 files/magica/js/libs 目录")
     parser.add_argument("--out", default=os.path.join(os.path.dirname(__file__), "..", "data", "catalog.json"))
+    parser.add_argument("--full-catalog", help="MCATBIN1 catalog（补齐属性等）")
     args = parser.parse_args(argv)
-    catalog = build(os.path.abspath(args.libs))
+    catalog = build(os.path.abspath(args.libs), args.full_catalog)
     out_path = os.path.abspath(args.out)
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as handle:

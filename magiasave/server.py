@@ -245,9 +245,12 @@ class Handler(BaseHTTPRequestHandler):
                 return {"ok": True, **editor.charas_view(text, offset, limit)}
             if name == "pieces":
                 return {"ok": True, **editor.pieces_view(text, offset, limit,
-                                                         query.get("rank"), query.get("type"))}
+                                                         query.get("rank"), query.get("type"),
+                                                         query.get("limit"), query.get("charaId"))}
             if name == "piece":
                 return {"ok": True, **editor.piece_detail(query.get("id"))}
+            if name == "piece-master":
+                return {"ok": True, **editor.piece_master_view(query.get("pieceId"))}
             if name == "decks":
                 return {"ok": True, **editor.decks_view()}
             if name == "formations":
@@ -271,7 +274,8 @@ class Handler(BaseHTTPRequestHandler):
                 return {"ok": True, **editor.section_tree(text, query.get("catalog") == "1")}
             if name == "pieces-catalog":
                 return {"ok": True, **editor.piece_catalog(text, offset, limit,
-                                                           query.get("rank"), query.get("type"))}
+                                                           query.get("rank"), query.get("type"),
+                                                           query.get("limit"), query.get("charaId"))}
             if name == "gifts-catalog":
                 return {"ok": True, **editor.gift_catalog(text, limit)}
             if name == "status":

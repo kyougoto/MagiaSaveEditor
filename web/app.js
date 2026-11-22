@@ -3,7 +3,8 @@
   'use strict';
 
   var S = { status: null, tab: 'overview', page: {}, busy: false, piecePicker: null, charaSel: null, charaPanel: null,
-    spiritSel: null, pieceSel: null, deckSel: null, pieceFilter: { rank: '', type: '' },
+    spiritSel: null, pieceSel: null, deckSel: null,
+    pieceFilter: { rank: '', type: '', limit: '' },
     itemsNav: { family: null, group: null }, open: {} };
 
   var TABS = [
@@ -27,6 +28,11 @@
     return String(text === null || text === undefined ? '' : text)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
+  // 游戏文本用「＠」做换行，前端统一转成 \n（配合 white-space: pre-wrap）
+  function nl(text) {
+    return String(text === null || text === undefined ? '' : text).replace(/[＠@]/g, '\n');
+  }
+
   function fmt(value) {
     if (value === null || value === undefined) { return '—'; }
     if (typeof value === 'number') { return value.toLocaleString('zh-CN'); }
@@ -859,7 +865,7 @@ if (panel === 'magia') {
           + '不改卡片、不改素材。</span></div>';
         if (dop.description) {
           html += '<details class="note"><summary class="small">简介</summary>'
-            + '<p class="small">' + esc(dop.description) + '</p></details>';
+            + '<p class="small pieceDesc">' + esc(nl(dop.description)) + '</p></details>';
         }
       } else {
         html += '<p class="small">官方 master 里没有这个角色的魔女化身。</p>';
@@ -1493,11 +1499,17 @@ function renderCharaDetail() {
     var url = '/api/view/pieces?offset=' + page.offset + '&limit=' + limit
       + '&q=' + encodeURIComponent(page.q || '')
       + '&rank=' + encodeURIComponent(filter.rank || '')
-      + '&type=' + encodeURIComponent(filter.type || '');
+      + '&type=' + encodeURIComponent(filter.type || '')
+      + '&limit=' + encodeURIComponent(filter.limit || '');
     return api(url).then(function (data) {
       var html = '<div class="toolbar"><input type="text" data-search placeholder="搜索结晶名称或 pieceId">'
         + '<select data-rank-filter>' + selectOptions(data.ranks, filter.rank) + '</select>'
         + '<select data-type-filter>' + selectOptions(data.types, filter.type, pieceTypeLabel) + '</select>'
+        + '<select data-limit-filter>'
+        + '<option value="">限制：全部</option>'
+        + '<option value="limited"' + (filter.limit === 'limited' ? ' selected' : '') + '>限制：仅限指定角色</option>'
+        + '<option value="free"' + (filter.limit === 'free' ? ' selected' : '') + '>限制：通用</option>'
+        + '</select>'
         + '<button data-add>添加记忆结晶…</button>'
         + '<button data-all-piece>全部等级设为…</button><span class="spacer"></span>'
         + '<span class="small">共 ' + data.total + ' 枚（同种可有多枚）· 点卡片看详情</span></div>';
@@ -1507,8 +1519,13 @@ function renderCharaDetail() {
           + thumb(row.icon, row.name, 'icon')
           + '<div class="name">' + esc(row.name) + '</div>'
           + '<div class="id">#' + esc(row.pieceId) + ' · ' + esc(pieceTypeLabel(row.type)) + ' · ' + esc(row.rank || '') + '</div>'
-          + (row.decks && row.decks.length ? '<div class="tags">'
-            + row.decks.map(deckTagHtml).join('') + '</div>' : '')
+          + ((row.limitCharaNames && row.limitCharaNames.length) || (row.decks && row.decks.length)
+            ? '<div class="tags">'
+              + (row.limitCharaNames || []).map(function (name) {
+                  return '<span class="tag warn">仅限 ' + esc(name) + '</span>';
+                }).join('')
+              + (row.decks || []).map(deckTagHtml).join('') + '</div>'
+            : '')
           + '<div class="row"><input data-piece-level type="number" min="1" max="' + esc(row.maxLevel || 50) + '" value="'
             + esc(row.level) + '"' + (row.editable ? '' : ' disabled') + '>'
             + '<span class="small">lv / ' + esc(row.maxLevel || '?') + '</span></div>'
@@ -1536,6 +1553,14 @@ function renderCharaDetail() {
       if (typeSelect) {
         typeSelect.addEventListener('change', function () {
           filter.type = typeSelect.value;
+          page.offset = 0;
+          render();
+        });
+      }
+      var limitSelect = $('main').querySelector('[data-limit-filter]');
+      if (limitSelect) {
+        limitSelect.addEventListener('change', function () {
+          filter.limit = limitSelect.value;
           page.offset = 0;
           render();
         });
@@ -1596,7 +1621,11 @@ function renderCharaDetail() {
         + '<span class="tag">突破 ' + esc(d.lbCount) + ' / 4</span>'
         + '<span class="tag ok">HP ' + fmt(d.hp) + '</span>'
         + '<span class="tag ok">攻 ' + fmt(d.attack) + '</span>'
-        + '<span class="tag ok">防 ' + fmt(d.defense) + '</span></div></div></section>';
+        + '<span class="tag ok">防 ' + fmt(d.defense) + '</span>'
+        + (d.limitCharaNames || []).map(function (name) {
+            return '<span class="tag warn">仅限 ' + esc(name) + '</span>';
+          }).join('')
+        + '</div></div></section>';
 
       html += '<section class="panel"><h2>等级与突破 <span class="tag ok">可回退</span></h2>'
         + pieceFieldHtml('等级（上限 ' + (d.maxLevel || '?') + '）', 'level', d.level, d.editable, d.maxLevel || 50)
@@ -1606,13 +1635,19 @@ function renderCharaDetail() {
       if ((d.skills || []).length) {
         html += '<section class="panel"><h2>技能</h2>';
         d.skills.forEach(function (skill) {
-          html += '<div class="kvList"><div class="kv"><span>' + esc(skill.name || ('技能 ' + skill.skillId))
-            + '</span><strong>' + esc(skill.description || '') + '</strong></div></div>';
+          var meta = [];
+          if (skill.intervalTurn) { meta.push('冷却 ' + skill.intervalTurn + ' 回合'); }
+          if (skill.unlockAt) { meta.push('满破（突破 ' + skill.unlockAt + '）后生效'); }
+          if (skill.active === false) { meta.push('当前不生效'); }
+          html += '<div class="skillRow' + (skill.active === false ? ' locked' : '') + '">'
+            + '<div class="skillHead">' + esc(skill.name || ('技能 ' + skill.skillId))
+            + (meta.length ? '<span class="small">（' + esc(meta.join('，')) + '）</span>' : '') + '</div>'
+            + '<div class="small">' + esc(nl(skill.description)) + '</div></div>';
         });
         html += '</section>';
       }
 
-      html += '<section class="panel"><h2>描述</h2><p class="pieceDesc">' + esc(d.description || '—') + '</p>'
+      html += '<section class="panel"><h2>描述</h2><p class="pieceDesc">' + esc(nl(d.description) || '—') + '</p>'
         + (d.illustrator ? '<p class="small">画师：' + esc(d.illustrator) + '</p>' : '') + '</section>';
 
       html += '<section class="panel"><h2>编成到的队伍</h2>';
@@ -2236,6 +2271,31 @@ function renderCharaDetail() {
     });
   }
 
+  function piecePreviewHtml(d) {
+    var html = '<div class="small">' + esc(pieceTypeLabel(d.type)) + ' · ' + esc(d.rank || '')
+      + (d.attribute ? ' · ' + esc(d.attribute) : '') + '</div>';
+    if (d.base) {
+      html += '<div class="small">基础：HP ' + fmt(d.base.hp) + ' / 攻 ' + fmt(d.base.attack)
+        + ' / 防 ' + fmt(d.base.defense) + '</div>';
+    }
+    if (d.statsAtMax) {
+      html += '<div class="small">满级 Lv' + esc(d.maxLevel) + '：HP ' + fmt(d.statsAtMax.hp)
+        + ' / 攻 ' + fmt(d.statsAtMax.attack) + ' / 防 ' + fmt(d.statsAtMax.defense) + '</div>';
+    }
+    if (d.description) {
+      html += '<p class="pieceDesc small">' + esc(nl(d.description)) + '</p>';
+    }
+    if ((d.limitCharaNames || []).length) {
+      html += '<div class="small warn">仅限：' + esc(d.limitCharaNames.join('、')) + '</div>';
+    }
+    (d.skills || []).forEach(function (skill) {
+      html += '<div class="small"><b>' + esc(skill.name || ('技能 ' + skill.skillId)) + '</b> '
+        + (skill.intervalTurn ? '<span class="tag">冷却 ' + esc(skill.intervalTurn) + ' 回合</span> ' : '')
+        + esc(nl(skill.description)) + '</div>';
+    });
+    return html;
+  }
+
   function openPiecePicker() {
     var filter = { rank: '', type: '' };
     function fetch(query) {
@@ -2261,7 +2321,8 @@ function renderCharaDetail() {
             row.addable
               ? '<div class="row"><input data-lv type="number" min="1" value="1"><span class="small">lv</span>'
                 + '<input data-lb type="number" min="0" max="4" value="0"><span class="small">突</span></div>'
-                + '<div class="row"><button class="mini" data-add>添加</button></div>'
+                + '<div class="row"><button class="mini" data-add>添加</button>'
+                + '<button class="mini" data-preview="' + esc(row.pieceId) + '">预览</button></div>'
               : '<div class="row"><span class="tag warn">缺成长数据</span></div>',
             '<span class="tag">' + esc(row.rank || '') + '</span>'
               + (row.ownedCount ? '<span class="tag ok">已有 ' + row.ownedCount + '</span>' : '')
@@ -2290,6 +2351,20 @@ function renderCharaDetail() {
             var level = Math.floor(Number(tileEl.querySelector('[data-lv]').value || 1));
             var lb = Math.floor(Number(tileEl.querySelector('[data-lb]').value || 0));
             edit([{ op: 'piece.add', pieceId: rows[index].pieceId, level: level, lbCount: lb }]);
+          });
+        });
+        host.querySelectorAll('[data-preview]').forEach(function (button) {
+          button.addEventListener('click', function () {
+            var tileEl = button.closest('.tile');
+            var box = tileEl.querySelector('.previewBox');
+            if (box) { box.parentNode.removeChild(box); return; }
+            api('/api/view/piece-master?pieceId=' + encodeURIComponent(button.getAttribute('data-preview')))
+              .then(function (detail) {
+                var div = document.createElement('div');
+                div.className = 'previewBox';
+                div.innerHTML = piecePreviewHtml(detail);
+                tileEl.appendChild(div);
+              }).catch(fail);
           });
         });
       }

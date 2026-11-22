@@ -495,3 +495,10 @@ img.faceAvatar {
   border: 1px solid var(--line); background: #100e17;
 }
 .charaHead img.charaFace { object-fit: cover; border-radius: 14px; }
+/* ---- 结晶预览 ---- */
+.previewBox {
+  margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line);
+  display: grid; gap: 4px;
+}
+.previewBox .small { line-height: 1.55; }
+.previewBox .pieceDesc { margin: 2px 0; white-space: pre-wrap; }

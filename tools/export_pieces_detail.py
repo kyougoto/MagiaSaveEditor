@@ -40,6 +40,11 @@ def main(argv=None):
     table = root["tables"]["piece"]
     zh_list = {str(row.get("pieceId")): row
                for row in load_json(os.path.join(libs_dir, "pieceList.json"), [])}
+    chara_names = {}
+    for row in load_json(os.path.join(libs_dir, "charaList.json"), []):
+        chara_id = as_int(row.get("id"))
+        if chara_id:
+            chara_names[str(chara_id)] = row.get("name")
     skills = load_json(os.path.join(libs_dir, "pieceSkillMap.json"), {})
 
     pieces = {}
@@ -57,15 +62,28 @@ def main(argv=None):
             info = skills.get(str(skill_id)) or {}
             if not info:
                 unnamed_skill += 1
+            skill_block = row.get("pieceSkill" + index) or {}
             skill_rows.append({
                 "skillId": skill_id,
                 "name": normalize(info.get("name")),
                 "description": normalize(info.get("shortDescription")),
-                "arts": len((row.get("pieceSkill" + index) or {}) or {}) if isinstance(
-                    row.get("pieceSkill" + index), dict) else 0,
+                "intervalTurn": as_int(skill_block.get("intervalTurn")) if isinstance(skill_block, dict) else None,
+                "arts": len(skill_block) if isinstance(skill_block, dict) else 0,
             })
+        limit_ids = []
+        for item in row.get("charaList") or []:
+            chara_id = as_int(item.get("charaId")) if isinstance(item, dict) else None
+            if chara_id and chara_id not in limit_ids:
+                limit_ids.append(chara_id)
+        if not limit_ids:
+            for token in str(row.get("charaIds") or "").split(","):
+                token = token.strip()
+                if token.isdigit() and int(token) not in limit_ids:
+                    limit_ids.append(int(token))
         pieces[str(piece_id)] = {
             "pieceId": piece_id,
+            "limitCharaIds": limit_ids,
+            "limitCharaNames": [chara_names.get(str(cid)) for cid in limit_ids],
             "name": local.get("pieceName") or row.get("pieceName"),
             "rank": row.get("rank"),
             "type": row.get("pieceType"),
