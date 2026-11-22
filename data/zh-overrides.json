@@ -1,9 +1,32 @@
 {
-  "sections": {
-    "505301": {
-      "title": "只能仰望的天空"
-    }
-  },
-  "pieces": {},
-  "doppels": {}
+ "sections": {
+  "505301": {
+   "title": "只能仰望的天空"
+  }
+ },
+ "pieces": {},
+ "doppels": {},
+ "challenges": {
+  "userDailyChallengeList_120": "通关剧情 5 次",
+  "userDailyChallengeList_126": "在镜界战斗 5 次",
+  "userLimitedChallengeList_300801": "通关 Scene0 film1",
+  "userLimitedChallengeList_300802": "通关 Scene0 film2",
+  "userLimitedChallengeList_300901": "通关 Scene0 film4",
+  "userLimitedChallengeList_301001": "通关 Scene0 film7",
+  "userLimitedChallengeList_301101": "通关 Scene0 film11",
+  "userLimitedChallengeList_301201": "通关 Scene0 film13",
+  "userTotalChallengeList_4002": "将魔法少女等级升至最大（第 2 次）",
+  "userTotalChallengeList_5002": "给魔法少女装备宝石（第 2 次）",
+  "userTotalChallengeList_5003": "给魔法少女装备宝石（第 3 次）",
+  "userTotalChallengeList_5004": "给魔法少女装备宝石（第 4 次）",
+  "userTotalChallengeList_5005": "给魔法少女装备宝石（第 5 次）",
+  "userTotalChallengeList_5006": "给魔法少女装备宝石（第 6 次）",
+  "userTotalChallengeList_5007": "给魔法少女装备宝石（第 7 次）",
+  "userTotalChallengeList_6002": "觉醒魔法少女（第 2 次）",
+  "userTotalChallengeList_7050": "解放魔法少女魔力（第 550 次）",
+  "userTotalChallengeList_9002": "提升 Magia 等级（第 2 次）",
+  "userTotalChallengeList_9003": "提升 Magia 等级（第 3 次）",
+  "userTotalChallengeList_22001": "进行属性强化（第 10 次）",
+  "userTotalChallengeList_22047": "进行属性强化（第 2300 次）"
+ }
 }

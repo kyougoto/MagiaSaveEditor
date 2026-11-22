@@ -2974,7 +2974,7 @@ function renderSectionDetail() {
           + '<button data-zero="' + esc(group.table) + '">全部清零</button></div>'
           + '<table><thead><tr><th>条件</th><th>目标</th><th>已达成</th><th>领取时间</th></tr></thead><tbody>';
         group.rows.forEach(function (row) {
-          html += '<tr><td><b>' + esc(row.label) + '</b> <span class="small">#'
+          html += '<tr><td><b>' + esc(nl(row.label)) + '</b> <span class="small">#'
             + esc(row.challengeId) + '</span></td>'
             + '<td class="num">' + (row.target === null || row.target === undefined ? '—' : row.target) + '</td>'
             + '<td><input data-ch type="number" min="0" value="' + esc(row.clearedCount) + '"> '

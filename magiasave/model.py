@@ -2160,6 +2160,29 @@ class Editor:
         chapter = (data.get("chapters") or {}).get(str(rules.get("chapterId"))) or {}
         return chapter.get("chapterType") == "BRANCH"
 
+    def _story_group_roots(self, data):
+        """每一套剧情的第一话不能锁定：第一部主线 / 第一部支线 / 第二部主线 /
+        第二部支线 各算一套；partNo=3 的每套外传各自算一套。"""
+        groups = {}
+        for key, chapter in (data.get("chapters") or {}).items():
+            chapter_id = int(chapter.get("chapterId") or key)
+            part = chapter.get("partNo")
+            if part == 1:
+                name = "p1-side" if self._is_side_chapter(part, chapter_id) else "p1-main"
+            elif part == 2:
+                name = "p2-side" if self._is_side_chapter(part, chapter_id) else "p2-main"
+            else:
+                name = "other-%s" % chapter_id
+            groups.setdefault(name, []).append(chapter)
+        roots = set(int(x) for x in self.ROOT_SECTIONS)
+        for chapters in groups.values():
+            sections = []
+            for chapter in chapters:
+                sections.extend(int(x) for x in chapter.get("sections") or [])
+            if sections:
+                roots.add(min(sections))
+        return roots
+
     def section_detail(self, section_id):
         """三级页面：一节下面挂的任务（含三星状态）。"""
         data = self.unlocks_catalog()
@@ -2189,7 +2212,7 @@ class Editor:
             "present": bool(section_row),
             "canPlay": (section_row or {}).get("canPlay"),
             "cleared": (section_row or {}).get("cleared") is True,
-            "lockable": int(section_id) not in self.ROOT_SECTIONS,
+            "lockable": int(section_id) not in self._story_group_roots(data),
             "quests": quests,
             "requires": [int(x) for x in (data.get("prerequisites") or {}).get(str(section_id)) or []],
             "unlocks": [int(x) for x in rules.get("unlockSections") or []],
@@ -2277,9 +2300,9 @@ class Editor:
     def _op_story_lock(self, profile, op, _force, extra):
         """锁定这一节：后续全部锁定，并把前一关设为未通关。"""
         section_id = _int(op.get("sectionId"), "sectionId", 1)
-        if section_id in self.ROOT_SECTIONS:
-            raise ValidationError("第一部第一章第一话不能锁定", code="root_section_locked")
         data = self.unlocks_catalog()
+        if section_id in self._story_group_roots(data):
+            raise ValidationError("每一套剧情的第一话不能锁定", code="root_section_locked")
         by_section, prereq, _successors = self._story_graph(data)
         if str(section_id) not in by_section:
             raise ValidationError("没有这一节的解锁数据", code="path_missing")

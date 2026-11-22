@@ -50,6 +50,24 @@ class Catalog:
                     continue
         for key in ("items", "chara", "cards", "pieces", "gifts", "sections", "chapters", "events", "doppels", "challenges", "emotionSkills"):
             self.data.setdefault(key, {})
+        self.overrides = self._load_overrides()
+        # 缺失的本地化文案（挑战等）直接并进索引，运行时无需再判断
+        for section, values in (self.overrides or {}).items():
+            if section == "challenges" and isinstance(values, dict):
+                for key, text in values.items():
+                    if text:
+                        self.data["challenges"][key] = text
+
+    @staticmethod
+    def _load_overrides():
+        path = os.path.join(paths.data_dir(), "zh-overrides.json")
+        if not os.path.isfile(path):
+            return {}
+        try:
+            with open(path, encoding="utf-8") as handle:
+                return json.load(handle) or {}
+        except Exception:
+            return {}
 
     # ---------------------------------------------------------------- 查询
 

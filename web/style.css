@@ -659,3 +659,5 @@ button.mini.star.on {
   text-shadow: 0 0 6px rgba(255, 212, 121, .55);
 }
 button.mini.star:hover { opacity: 1; border-color: #ffd479; }
+/* ---- 挑战条件里的换行 ---- */
+#main table td b { white-space: pre-wrap; }
