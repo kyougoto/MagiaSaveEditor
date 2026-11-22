@@ -242,6 +242,20 @@ magia_save_editor/
 
 正式使用只跑 exe（`dist/MagiaSaveEditor.exe`）；源码方式仅作开发调试，两者共用同一套 `data/` / `web/` / `assets/`。
 
+## 版本管理
+
+仓库在项目根（`magia_save_editor/.git`），代码、`data/`、`assets/` 都在版本里；`build/`、`dist/`、`_work/`、`_re/` 与 `__pycache__` 忽略。
+
+```bash
+git log --oneline              # 看历史
+git status                     # 看当前改动
+git checkout -- <文件>          # 撤销单个文件的未提交改动
+git checkout -- .              # 撤销全部未提交改动
+git reset --hard <commit>      # 回到某次提交（会丢当前改动）
+git checkout <commit> -- <文件> # 从旧版本捞回被误删的文件
+```
+
+首次 clone 后如果只想跑起来，`python launcher.py` 或 `python build_exe.py` 即可；`data/` 与 `assets/` 已入库，不需要重新导数据。
 ## 启动
 
 ```bash
