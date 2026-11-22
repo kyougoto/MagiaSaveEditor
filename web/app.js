@@ -1654,8 +1654,9 @@ function renderCharaDetail() {
       if ((d.decks || []).length) {
         html += '<div class="kvList">';
         d.decks.forEach(function (slot) {
-          html += '<div class="kv"><span>' + esc(slot.name) + '</span><strong>第 ' + esc(slot.member)
-            + ' 位 · 槽 ' + esc(slot.slot) + '</strong></div>';
+          html += '<div class="kv"><span>' + esc(slot.name) + '</span><strong>'
+            + (slot.charaName ? esc(slot.charaName) + ' · ' : '')
+            + '第 ' + esc(slot.member) + ' 位 · 槽 ' + esc(slot.slot) + '</strong></div>';
         });
         html += '</div>';
       } else {

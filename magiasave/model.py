@@ -1707,16 +1707,25 @@ class Editor:
         return slots
 
     def deck_index(self):
-        """结晶实例 id → 被编成到的队伍位置列表（可能同时在多个队伍）。"""
+        """结晶实例 id → 被编成到的队伍位置（带那个位置上的魔法少女）。"""
+        cards = {str(row.get("id")): row for row in self.rows("userCardList")}
         index = {}
         for deck in self.rows("userDeckList"):
             name = deck.get("name") or ("队伍 %s" % deck.get("deckType"))
             for (member, slot), instance in self.deck_piece_slots(deck).items():
+                card = cards.get(str(deck.get("userCardId%d" % member))) or {}
+                card_id = card.get("cardId")
+                master = self.masters.card(card_id) if card_id else None
+                chara_id = (master or {}).get("charaNo")
                 index.setdefault(str(instance), []).append({
                     "deckType": deck.get("deckType"),
                     "name": name,
                     "member": member,
                     "slot": slot,
+                    "charaId": chara_id,
+                    "charaName": self.catalog.chara_name(chara_id) if chara_id else None,
+                    "userCardId": card.get("id"),
+                    "face": ("/assets/faces/%s.png" % card_id) if card_id else None,
                 })
         return index
 
