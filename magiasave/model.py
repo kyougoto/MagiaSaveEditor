@@ -1890,6 +1890,7 @@ class Editor:
                 "formationSheetId": deck.get("formationSheetId"),
                 "formationName": formation.get("name"),
                 "formationSlots": formation.get("slots") or [],
+                "formationSkills": formation.get("skills") or {},
                 "helperPosition": helper_position,
                 "helper": {"slot": "helper", "position": helper_position,
                            "label": "支援（好友）"} if helper_position else None,

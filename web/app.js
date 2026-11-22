@@ -1798,8 +1798,12 @@ function renderCharaDetail() {
     var html = '<div class="deckBoard">';
     POSITION_VISUAL_ORDER.forEach(function (slot) {
       var item = cells[slot];
-      var cls = 'boardCell' + (item ? ' ' + item.kind : '');
+      var buff = (deck.formationSkills || {})[String(slot)];
+      var cls = 'boardCell' + (item ? ' ' + item.kind : '') + (buff ? ' effective' : '');
       var inner = '<span class="pos">' + slot + '</span>';
+      if (buff) {
+        inner += '<span class="buffMark" title="' + esc(buff.description || buff.name || '') + '">强</span>';
+      }
       if (item && item.userCardId) {
         inner += '<img class="boardFace" loading="lazy" src="' + esc(item.face || item.icon)
           + '" alt="' + esc(item.name || '') + '">';
@@ -1810,6 +1814,21 @@ function renderCharaDetail() {
         inner += '<span class="whoCenter empty">空位</span>';
       }
       html += '<div class="' + cls + '">' + inner + '</div>';
+    });
+    return html + '</div>';
+  }
+
+  function formationBuffListHtml(deck) {
+    var skills = deck.formationSkills || {};
+    var keys = Object.keys(skills);
+    if (!keys.length) {
+      return '<p class="small">这个阵型没有额外的强化格。</p>';
+    }
+    var html = '<div class="kvList">';
+    keys.sort(function (a, b) { return Number(a) - Number(b); }).forEach(function (slot) {
+      var info = skills[slot] || {};
+      html += '<div class="kv"><span>强化格 ' + esc(slot) + '</span><strong>'
+        + esc(info.description || info.name || '') + '</strong></div>';
     });
     return html + '</div>';
   }
@@ -1930,7 +1949,8 @@ function renderCharaDetail() {
         + '<button class="mini" data-formation-manage>阵型管理…</button>'
         + '</div></section>';
       html += '<section class="panel"><h2>站位总览</h2>' + deckBoardHtml(deck)
-        + '<p class="small">格子编号按游戏规则（3 6 9 / 2 5 8 / 1 4 7），与阵型强化格一一对应。</p></section>';
+        + formationBuffListHtml(deck)
+        + '<p class="small">格子编号按游戏规则（3 6 9 / 2 5 8 / 1 4 7），角标「强」就是阵型的强化格。</p></section>';
       html += '<section class="panel"><h2>成员与结晶</h2><div class="deckGrid detail">';
       (deck.layout || []).forEach(function (item) {
         html += deckSlotHtml(deck, item, true);
@@ -2126,13 +2146,18 @@ function renderCharaDetail() {
       var member = taken[slot];
       var key = isHelper ? 'helper' : (member ? String(member.slot) : '');
       var isCurrent = key && String(key) === String(currentKey);
+      var buff = (deck.formationSkills || {})[String(slot)];
       var cls = 'slotCell';
+      if (buff) { cls += ' effective'; }
       if (!inPool) { cls += ' disabled'; }
       else if (isHelper) { cls += ' helper'; }
       else if (member) { cls += ' occupied'; }
       else { cls += ' free'; }
       if (isCurrent) { cls += ' current'; }
       html += '<div class="' + cls + '"><span class="pos">' + slot + '</span>';
+      if (buff) {
+        html += '<span class="buffMark" title="' + esc(buff.description || buff.name || '') + '">强</span>';
+      }
       if (isHelper) { html += '<span class="who">支援位</span>'; }
       else if (member) { html += '<span class="who">' + esc(member.name || '') + '</span>'; }
       else if (inPool) { html += '<span class="who">空位</span>'; }
