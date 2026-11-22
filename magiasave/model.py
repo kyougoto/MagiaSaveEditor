@@ -2585,6 +2585,14 @@ class Editor:
             raise ValidationError("这些小节已经是目标状态", code="already_present")
         self._ensure_chapter(profile, chapter_id, cleared)
         if cleared:
+            # 前置章节的小节也一起通关了，章节状态要跟着置为已通
+            touched_chapters = {int(chapter_id)}
+            for sid in needed:
+                owner = (int(sid) // 100) % 100
+                if str(owner) in chapters_meta:
+                    touched_chapters.add(owner)
+            for cid in sorted(touched_chapters):
+                self._ensure_chapter(profile, cid, True)
             self._unlock_following_chapters(profile, chapter_id, chapters_meta, chapter_prereq, stamp)
         extra.add("state.userChapterList")
         extra.add("state.userSectionList")

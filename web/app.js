@@ -2444,88 +2444,112 @@ function renderCharaDetail() {
   }
 
   function openPiecePicker() {
-    var filter = { rank: '', type: '', limit: '' };
+    var filter = { rank: '', type: '', limit: '', charaId: '' };
+    var charaOptions = S.charaOptions || [];
     function fetch(query) {
       return api('/api/view/pieces-catalog?limit=200&q=' + encodeURIComponent(query)
         + '&rank=' + encodeURIComponent(filter.rank)
         + '&type=' + encodeURIComponent(filter.type)
-        + '&limitMode=' + encodeURIComponent(filter.limit));
+        + '&limitMode=' + encodeURIComponent(filter.limit)
+        + '&charaId=' + encodeURIComponent(filter.charaId));
     }
-    openPicker({
-      title: '添加记忆结晶',
-      placeholder: '搜索结晶名称或 pieceId（留空列出全部已实装）',
-      load: fetch,
-      meta: function (data) { return '匹配 ' + data.total + ' 条，可选等级与突破'; },
-      render: function (rows, data) {
-        var html = '<div class="toolbar"><select data-pick-rank>'
-          + selectOptions(data && data.ranks, filter.rank) + '</select>'
-          + '<select data-pick-type>' + selectOptions(data && data.types, filter.type, pieceTypeLabel)
-          + '</select>'
-          + '<select data-pick-limit>'
-          + '<option value="">限制：全部</option>'
-          + '<option value="limited"' + (filter.limit === 'limited' ? ' selected' : '') + '>限制：仅限指定角色</option>'
-          + '<option value="free"' + (filter.limit === 'free' ? ' selected' : '') + '>限制：通用</option>'
-          + '</select><span class="small">筛选立即生效</span></div><div class="grid wide">';
-        rows.forEach(function (row) {
-          html += tileHtml(
-            thumb(row.icon, row.name, 'icon'),
-            row.name,
-            '#' + row.pieceId + ' · ' + pieceTypeLabel(row.type),
-            row.addable
-              ? '<div class="row"><input data-lv type="number" min="1" value="1"><span class="small">lv</span>'
-                + '<input data-lb type="number" min="0" max="4" value="0"><span class="small">突</span></div>'
-                + '<div class="row"><button class="mini" data-add>添加</button>'
-                + '<button class="mini" data-preview="' + esc(row.pieceId) + '">预览</button></div>'
-              : '<div class="row"><span class="tag warn">缺成长数据</span></div>',
-            '<span class="tag">' + esc(row.rank || '') + '</span>'
-              + (row.ownedCount ? '<span class="tag ok">已有 ' + row.ownedCount + '</span>' : '')
-          );
-        });
-        return html + '</div>';
-      },
-      bind: function (host, rows) {
-        var rankSelect = host.querySelector('[data-pick-rank]');
-        var limitSelect = host.querySelector('[data-pick-limit]');
-        if (limitSelect) {
-          limitSelect.addEventListener('change', function () {
-            filter.limit = limitSelect.value;
-            if (host._reload) { host._reload(); }
+    var ready = charaOptions.length
+      ? Promise.resolve()
+      : api('/api/view/charas?limit=200').then(function (data) {
+          S.charaOptions = (data.rows || []).map(function (row) {
+            return { charaId: row.charaId, name: row.name };
+          });
+          charaOptions = S.charaOptions;
+        }).catch(function () {});
+    ready.then(function () {
+      openPicker({
+        title: '添加记忆结晶',
+        placeholder: '搜索结晶名称或 pieceId（留空列出全部已实装）',
+        load: fetch,
+        meta: function (data) { return '匹配 ' + data.total + ' 条，可选等级与突破'; },
+        render: function (rows, data) {
+          var html = '<div class="toolbar"><select data-pick-rank>'
+            + selectOptions(data && data.ranks, filter.rank) + '</select>'
+            + '<select data-pick-type>' + selectOptions(data && data.types, filter.type, pieceTypeLabel)
+            + '</select>'
+            + '<select data-pick-limit>'
+            + '<option value="">限制：全部</option>'
+            + '<option value="limited"' + (filter.limit === 'limited' ? ' selected' : '') + '>限制：仅限指定角色</option>'
+            + '<option value="free"' + (filter.limit === 'free' ? ' selected' : '') + '>限制：通用</option>'
+            + '</select>'
+            + '<select data-pick-chara><option value="">角色：全部</option>'
+            + charaOptions.map(function (row) {
+                return '<option value="' + esc(row.charaId) + '"'
+                  + (String(row.charaId) === String(filter.charaId) ? ' selected' : '') + '>'
+                  + esc(row.name) + '</option>';
+              }).join('')
+            + '</select><span class="small">筛选立即生效</span></div><div class="grid wide">';
+          rows.forEach(function (row) {
+            html += tileHtml(
+              thumb(row.icon, row.name, 'icon'),
+              row.name,
+              '#' + row.pieceId + ' · ' + pieceTypeLabel(row.type),
+              row.addable
+                ? '<div class="row"><input data-lv type="number" min="1" value="1"><span class="small">lv</span>'
+                  + '<input data-lb type="number" min="0" max="4" value="0"><span class="small">突</span></div>'
+                  + '<div class="row"><button class="mini" data-add>添加</button>'
+                  + '<button class="mini" data-preview="' + esc(row.pieceId) + '">预览</button></div>'
+                : '<div class="row"><span class="tag warn">缺成长数据</span></div>',
+              '<span class="tag">' + esc(row.rank || '') + '</span>'
+                + (row.ownedCount ? '<span class="tag ok">已有 ' + row.ownedCount + '</span>' : '')
+            );
+          });
+          return html + '</div>';
+        },
+        bind: function (host, rows) {
+          var limitSelect = host.querySelector('[data-pick-limit]');
+          if (limitSelect) {
+            limitSelect.addEventListener('change', function () {
+              filter.limit = limitSelect.value;
+              if (host._reload) { host._reload(); }
+            });
+          }
+          var charaSelect = host.querySelector('[data-pick-chara]');
+          if (charaSelect) {
+            charaSelect.addEventListener('change', function () {
+              filter.charaId = charaSelect.value;
+              if (host._reload) { host._reload(); }
+            });
+          }
+          var rankSelect = host.querySelector('[data-pick-rank]');
+          if (rankSelect) {
+            rankSelect.addEventListener('change', function () {
+              filter.rank = rankSelect.value;
+              if (host._reload) { host._reload(); }
+            });
+          }
+          var typeSelect = host.querySelector('[data-pick-type]');
+          if (typeSelect) {
+            typeSelect.addEventListener('change', function () {
+              filter.type = typeSelect.value;
+              if (host._reload) { host._reload(); }
+            });
+          }
+          host.querySelectorAll('[data-add]').forEach(function (button, index) {
+            button.addEventListener('click', function () {
+              var tileEl = button.closest('.tile');
+              var level = Math.floor(Number(tileEl.querySelector('[data-lv]').value || 1));
+              var lb = Math.floor(Number(tileEl.querySelector('[data-lb]').value || 0));
+              edit([{ op: 'piece.add', pieceId: rows[index].pieceId, level: level, lbCount: lb }]);
+            });
+          });
+          host.querySelectorAll('[data-preview]').forEach(function (button) {
+            button.addEventListener('click', function () {
+              api('/api/view/piece-master?pieceId=' + encodeURIComponent(button.getAttribute('data-preview')))
+                .then(function (detail) {
+                  openPreview(detail.name || ('结晶 ' + detail.pieceId), piecePreviewHtml(detail));
+                }).catch(fail);
+            });
           });
         }
-        if (rankSelect) {
-          rankSelect.addEventListener('change', function () {
-            filter.rank = rankSelect.value;
-            if (host._reload) { host._reload(); }
-          });
-        }
-        var typeSelect = host.querySelector('[data-pick-type]');
-        if (typeSelect) {
-          typeSelect.addEventListener('change', function () {
-            filter.type = typeSelect.value;
-            if (host._reload) { host._reload(); }
-          });
-        }
-        host.querySelectorAll('[data-add]').forEach(function (button, index) {
-          button.addEventListener('click', function () {
-            var tileEl = button.closest('.tile');
-            var level = Math.floor(Number(tileEl.querySelector('[data-lv]').value || 1));
-            var lb = Math.floor(Number(tileEl.querySelector('[data-lb]').value || 0));
-            edit([{ op: 'piece.add', pieceId: rows[index].pieceId, level: level, lbCount: lb }]);
-          });
-        });
-        host.querySelectorAll('[data-preview]').forEach(function (button) {
-          button.addEventListener('click', function () {
-            api('/api/view/piece-master?pieceId=' + encodeURIComponent(button.getAttribute('data-preview')))
-              .then(function (detail) {
-                openPreview(detail.name || ('结晶 ' + detail.pieceId), piecePreviewHtml(detail));
-              }).catch(fail);
-          });
-        });
-      }
+      });
     });
   }
-
-  // ------------------------------------------------------------ 任务
 
   function openState(tabId, key, fallback) {
     S.open = S.open || {};
