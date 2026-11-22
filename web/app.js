@@ -448,6 +448,7 @@
     var host = $('modal');
     $('modalTitle').textContent = title;
     var input = $('modalSearch');
+    input.classList.remove('hidden');
     input.value = '';
     input.placeholder = placeholder || '搜索名称或 ID';
     $('modalMeta').textContent = '';
@@ -461,6 +462,9 @@
   /* config: { title, placeholder, load(q), meta(data), render(rows), bind(host, rows) } */
   function openPicker(config) {
     openModal(config.title, config.placeholder);
+    if (config.search === false) {
+      $('modalSearch').classList.add('hidden');
+    }
     function load(query) {
       $('modalBody').innerHTML = '<div class="empty">加载中…</div>';
       config.load(query).then(function (data) {
@@ -2050,48 +2054,22 @@ function renderCharaDetail() {
 
   function openSwapPicker(deckType, from) {
     api('/api/view/decks').then(function (data) {
-      var deck = (data.decks || []).filter(function (item) { return String(item.deckType) === String(deckType); })[0];
+      var deck = (data.decks || []).filter(function (item) {
+        return String(item.deckType) === String(deckType);
+      })[0];
       if (!deck) { fail(new Error('找不到该编成')); return; }
       openPicker({
-        title: '换位：选择目标位置',
-        placeholder: '位置',
+        title: '换位（点九宫格）',
+        placeholder: '阵型格子',
+        search: false,
         load: function () {
-          var rows = [];
-          (deck.layout || []).forEach(function (item) {
-            if (item.kind === 'empty') { return; }
-            var isHelper = item.kind === 'helper';
-            var key = isHelper ? 'helper' : item.slot;
-            rows.push({
-              key: key,
-              label: isHelper ? '支援位' : ('第 ' + item.slot + ' 位'),
-              name: isHelper ? '支援（好友）' : (item.name || '空位'),
-              position: item.position,
-              same: String(key) === String(from),
-            });
-          });
-          return Promise.resolve({ rows: rows, total: rows.length });
+          return Promise.resolve({ rows: [{ html: slotGridHtml(deck, from, false) }], total: 1 });
         },
-        meta: function (result) { return '共 ' + result.total + ' 个位置'; },
-        render: function (rows) {
-          var html = '<div class="grid">';
-          rows.forEach(function (row) {
-            html += '<div class="tile"><div class="name">' + esc(row.label)
-              + positionGridHtml(row.position, row.key === 'helper') + '</div>'
-              + '<div class="id">' + esc(row.name) + '</div><div class="row">'
-              + (row.same ? '<span class="small">当前位置</span>'
-                : '<button class="mini" data-swap-pick="' + esc(row.key) + '">换到这里</button>')
-              + '</div></div>';
-          });
-          return html + '</div>';
+        meta: function () {
+          return '阵型：' + (deck.formationName || deck.formationSheetId);
         },
-        bind: function (host) {
-          host.querySelectorAll('[data-swap-pick]').forEach(function (button) {
-            button.addEventListener('click', function () {
-              edit([{ op: 'deck.swap', deckType: deckType, a: from,
-                b: button.getAttribute('data-swap-pick') }]);
-            });
-          });
-        }
+        render: function (rows) { return (rows[0] && rows[0].html) || ''; },
+        bind: function (host) { bindSlotGrid(host, deckType, from); }
       });
     }).catch(fail);
   }
@@ -2134,7 +2112,7 @@ function renderCharaDetail() {
     }).catch(fail);
   }
 
-  function helperGridHtml(deck) {
+  function slotGridHtml(deck, currentKey, allowEmpty) {
     var slotSet = {};
     (deck.formationSlots || []).forEach(function (slot) { slotSet[slot] = true; });
     var taken = {};
@@ -2146,25 +2124,46 @@ function renderCharaDetail() {
       var inPool = slotSet[slot];
       var isHelper = slot === deck.helperPosition;
       var member = taken[slot];
+      var key = isHelper ? 'helper' : (member ? String(member.slot) : '');
+      var isCurrent = key && String(key) === String(currentKey);
       var cls = 'slotCell';
       if (!inPool) { cls += ' disabled'; }
       else if (isHelper) { cls += ' helper'; }
       else if (member) { cls += ' occupied'; }
       else { cls += ' free'; }
+      if (isCurrent) { cls += ' current'; }
       html += '<div class="' + cls + '"><span class="pos">' + slot + '</span>';
       if (isHelper) { html += '<span class="who">支援位</span>'; }
       else if (member) { html += '<span class="who">' + esc(member.name || '') + '</span>'; }
       else if (inPool) { html += '<span class="who">空位</span>'; }
-      if (inPool && !isHelper) {
-        if (member) {
-          html += '<button class="mini" data-helper-swap="' + slot + '">交换</button>';
-        } else {
-          html += '<button class="mini" data-helper-pick="' + slot + '">放这里</button>';
-        }
+      if (isCurrent) {
+        html += '<span class="small">当前位置</span>';
+      } else if (inPool && isHelper) {
+        html += '<button class="mini" data-slot-swap="helper">换到这里</button>';
+      } else if (member) {
+        html += '<button class="mini" data-slot-swap="' + esc(member.slot) + '">换到这里</button>';
+      } else if (inPool && allowEmpty) {
+        html += '<button class="mini" data-slot-set="' + slot + '">放这里</button>';
       }
       html += '</div>';
     });
     return html + '</div>';
+  }
+
+  function bindSlotGrid(host, deckType, fromKey) {
+    host.querySelectorAll('[data-slot-set]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        edit([{ op: 'deck.helper', deckType: deckType,
+          position: Number(button.getAttribute('data-slot-set')) }]);
+      });
+    });
+    host.querySelectorAll('[data-slot-swap]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        var target = button.getAttribute('data-slot-swap');
+        edit([{ op: 'deck.swap', deckType: deckType, a: fromKey,
+          b: target === 'helper' ? 'helper' : Number(target) }]);
+      });
+    });
   }
 
   function openHelperPicker(deckType) {
@@ -2176,28 +2175,16 @@ function renderCharaDetail() {
       openPicker({
         title: '调整支援位（点九宫格）',
         placeholder: '阵型格子',
+        search: false,
         load: function () {
-          return Promise.resolve({ rows: [{ html: helperGridHtml(deck) }], total: 1 });
+          return Promise.resolve({ rows: [{ html: slotGridHtml(deck, 'helper', true) }], total: 1 });
         },
         meta: function () {
           return '阵型：' + (deck.formationName || deck.formationSheetId)
             + ' · 当前支援位：' + (deck.helperPosition || '—');
         },
         render: function (rows) { return (rows[0] && rows[0].html) || ''; },
-        bind: function (host) {
-          host.querySelectorAll('[data-helper-pick]').forEach(function (button) {
-            button.addEventListener('click', function () {
-              edit([{ op: 'deck.helper', deckType: deckType,
-                position: Number(button.getAttribute('data-helper-pick')) }]);
-            });
-          });
-          host.querySelectorAll('[data-helper-swap]').forEach(function (button) {
-            button.addEventListener('click', function () {
-              edit([{ op: 'deck.swap', deckType: deckType, a: 'helper',
-                b: Number(button.getAttribute('data-helper-swap')) }]);
-            });
-          });
-        }
+        bind: function (host) { bindSlotGrid(host, deckType, 'helper'); }
       });
     }).catch(fail);
   }

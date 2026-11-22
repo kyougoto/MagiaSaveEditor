@@ -530,3 +530,8 @@ img.faceAvatar {
 .slotCell.occupied { border-color: rgba(180, 108, 255, .55); }
 .slotCell.disabled { opacity: .35; }
 .slotCell button { margin-top: 2px; }
+/* ---- 无搜索的九宫格弹窗 ---- */
+#modalSearch.hidden { display: none; }
+.modal .head { gap: 10px; }
+.slotCell.current { border-color: #ffd479; }
+.slotCell.current .who { color: #ffd479; }
