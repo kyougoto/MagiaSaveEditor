@@ -1274,6 +1274,7 @@ if (panel === 'magia') {
         + '<div class="id">live2dId ' + esc(row.live2dId) + '</div><div class="tags">'
         + (row.current ? '<span class="tag ok">当前穿着</span>' : '')
         + (row.owned ? '<span class="tag ok">已获取</span>' : '<span class="tag">未获取</span>')
+        + (row.invalidMaster ? '<span class="tag warn">主数据无此编号 · 会导致游戏读不出存档</span>' : '')
         + (row.default ? '<span class="tag warn">默认服装 · 不可取消</span>' : '')
         + '</div><div class="row">';
       if (row.owned) {
@@ -1290,7 +1291,10 @@ if (panel === 'magia') {
     });
     if (!rows.length) { html += '<p class="small">官方衣装表里没有这个角色的衣装。</p>'; }
     html += '</div><p class="small">默认服装（live2dId 00）永远保持已获取，也不能取消 —— 战斗与剧情都依赖它。'
-      + '正在穿着的衣装要先换成别的才能取消获取。</p></section>';
+      + '正在穿着的衣装要先换成别的才能取消获取。</p>'
+      + '<div class="row"><button class="mini" data-costume-clean>清理主数据里不存在的衣装</button>'
+      + '<span class="small">别人给的存档进不去游戏时，先点这个（会删掉 live2dId 在 MCATBIN1 里查不到的行）</span></div>'
+      + '</section>';
     return html;
   }
 
@@ -1483,6 +1487,12 @@ function renderCharaDetail() {
           unlocked: button.getAttribute('data-doppel-set') === '1' }]);
       });
     });
+    var costumeClean = $('main').querySelector('[data-costume-clean]');
+    if (costumeClean) {
+      costumeClean.addEventListener('click', function () {
+        edit([{ op: 'costume.clean' }]);
+      });
+    }
     $('main').querySelectorAll('[data-costume-add]').forEach(function (button) {
       button.addEventListener('click', function () {
         edit([{ op: 'costume.add', charaId: d.charaId,

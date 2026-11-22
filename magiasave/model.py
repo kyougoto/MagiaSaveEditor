@@ -954,12 +954,23 @@ class Editor:
             "siblings": siblings,
         }
 
+    def live2d_master(self):
+        return self._data("live2d.json", {"chara": {}})
+
+    def live2d_ids(self, chara_id):
+        """主数据（MCATBIN1 tables.live2d）里该角色真实存在的衣装编号。"""
+        entry = (self.live2d_master().get("chara") or {}).get(str(chara_id))
+        if entry is None:
+            return None
+        return set(entry.keys())
+
     def costumes_catalog(self):
         return self._data("costumes.json", {"charaCostumes": {}})
 
     def costumes_view(self, chara_id):
         """衣装列表：默认服装（live2dId 00）永远算已拥有且不可取消。"""
         entries = (self.costumes_catalog().get("charaCostumes") or {}).get(str(chara_id)) or []
+        master_ids = self.live2d_ids(chara_id)
         owned = {str(row.get("live2dId")) for row in self.rows("userLive2dList")
                  if str(row.get("charaId")) == str(chara_id)}
         chara_row = None
@@ -979,6 +990,8 @@ class Editor:
                 "owned": is_default or live2d_id in owned,
                 "current": live2d_id == current,
                 "locked": is_default,
+                # libs 的衣装清单可能比主数据多（如 1015 的 51），这类编号写进存档会让客户端读不出来
+                "invalidMaster": bool(master_ids is not None and live2d_id not in master_ids),
             })
         known = {row["live2dId"] for row in rows}
         for live2d_id in sorted(owned - known):
@@ -3824,6 +3837,11 @@ class Editor:
         if self._costume_entry(chara_row.get("charaId"), live2d_id) is None:
             raise ValidationError("角色 %s 没有衣装 %s" % (chara_row.get("charaId"), live2d_id),
                                   code="path_missing")
+        master_ids = self.live2d_ids(chara_row.get("charaId"))
+        if master_ids is not None and live2d_id not in master_ids:
+            raise ValidationError(
+                "衣装 %s 不在游戏主数据里（客户端读取会失败），不能添加" % live2d_id,
+                code="costume_unknown_live2d")
         rows = profile["state"].setdefault("userLive2dList", [])
         for row in rows:
             if (str(row.get("charaId")) == str(chara_row.get("charaId"))
@@ -3834,6 +3852,23 @@ class Editor:
             "charaId": chara_row.get("charaId"),
             "live2dId": live2d_id,
         })
+        extra.add("state.userLive2dList")
+
+    def _op_costume_clean(self, profile, op, _force, extra):
+        """删掉 userLive2dList 里主数据不存在的衣装（这份存档进不去游戏的常见原因）。"""
+        master = self.live2d_master().get("chara") or {}
+        rows = profile["state"].get("userLive2dList") or []
+        removed = []
+        for row in list(rows):
+            chara_id = str(row.get("charaId"))
+            allowed = master.get(chara_id)
+            if allowed is None:
+                continue
+            if str(row.get("live2dId")) not in allowed:
+                rows.remove(row)
+                removed.append((row.get("charaId"), row.get("live2dId")))
+        if not removed:
+            raise ValidationError("没有主数据里不存在的衣装", code="already_present")
         extra.add("state.userLive2dList")
 
     def _op_costume_remove(self, profile, op, _force, extra):
