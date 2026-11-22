@@ -636,3 +636,16 @@ button.lr-map-node.lr-required::after {
   color: var(--text); line-height: 1.6;
 }
 .policyNote b { color: #ffd479; }
+/* ---- 分支地图节点：落在 66x48 格内，文字紧凑 ---- */
+button.lr-map-node {
+  width: 60px; height: 44px; padding: 3px 4px; border-radius: 8px;
+  gap: 1px; justify-content: center;
+}
+button.lr-map-node .lr-node-label {
+  font-size: 9.5px; line-height: 1.15; max-height: 22px; overflow: hidden;
+}
+button.lr-map-node .lr-node-status { font-size: 8.5px; }
+button.lr-map-node.lr-required::after {
+  content: '必';
+  left: 2px; bottom: 1px; padding: 1px 3px; font-size: 8px; border-radius: 4px;
+}

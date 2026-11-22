@@ -2690,10 +2690,12 @@ function renderCharaDetail() {
     });
   }
 
-// 布局照搬游戏分支地图（LostRecordMap.js）：
-  //   x = (pointX-1)*66 + 20, y = (pointY-1)*48 + 20, 节点 150x94
-  //   连线 (x+60, y+35) -> ((tx-1)*66+80, (ty-1)*48+55)
-  var MAP_CELL_W = 66, MAP_CELL_H = 48, MAP_PAD = 20, MAP_NODE_W = 150, MAP_NODE_H = 94;
+  // 布局照搬游戏分支地图（LostRecordMap.js）：
+  //   x = (pointX-1)*66 + 20, y = (pointY-1)*48 + 20
+  // 节点落在 66x48 的格子里（比格小一圈，避免相邻重叠），连线走节点中心
+  var MAP_CELL_W = 66, MAP_CELL_H = 48, MAP_PAD = 20, MAP_NODE_W = 60, MAP_NODE_H = 44;
+  var MAP_NODE_OFF_X = (MAP_CELL_W - MAP_NODE_W) / 2;
+  var MAP_NODE_OFF_Y = (MAP_CELL_H - MAP_NODE_H) / 2;
 
   function chapterTreeHtml(map) {
     var nodes = (map.nodes || []).filter(function (node) { return !node.unplaced; });
@@ -2703,8 +2705,8 @@ function renderCharaDetail() {
     }
     var byId = {};
     nodes.forEach(function (node) { byId[String(node.sectionId)] = node; });
-    function px(node) { return (node.x - 1) * MAP_CELL_W + MAP_PAD; }
-    function py(node) { return (node.y - 1) * MAP_CELL_H + MAP_PAD; }
+    function px(node) { return (node.x - 1) * MAP_CELL_W + MAP_PAD + MAP_NODE_OFF_X; }
+    function py(node) { return (node.y - 1) * MAP_CELL_H + MAP_PAD + MAP_NODE_OFF_Y; }
     var maxX = 0, maxY = 0;
     nodes.forEach(function (node) {
       maxX = Math.max(maxX, px(node) + MAP_NODE_W);
@@ -2715,8 +2717,8 @@ function renderCharaDetail() {
       (node.connect || []).forEach(function (targetId) {
         var target = byId[String(targetId)];
         if (!target) { return; }
-        edges += '<line x1="' + (px(node) + 60) + '" y1="' + (py(node) + 35)
-          + '" x2="' + (px(target) + 80) + '" y2="' + (py(target) + 55) + '"'
+        edges += '<line x1="' + (px(node) + MAP_NODE_W / 2) + '" y1="' + (py(node) + MAP_NODE_H / 2)
+          + '" x2="' + (px(target) + MAP_NODE_W / 2) + '" y2="' + (py(target) + MAP_NODE_H / 2) + '"'
           + (node.cleared ? ' class="on"' : '') + '/>';
       });
     });
@@ -2899,8 +2901,7 @@ function renderSectionDetail() {
           + (row.cleared ? '1' : '0') + '">' + (row.cleared ? '已通' : '未通') + '</button></td><td>'
           + '<button class="mini" data-chapter-run="' + esc(row.chapterId) + '">整章通关</button> '
           + '<button class="mini" data-chapter-unlock="' + esc(row.chapterId) + '">整章解锁</button>'
-          + ' <button class="mini" data-chapter-tree="' + esc(row.chapterId) + '">'
-          + (row.layoutCount ? '剧情树' : '小节') + '</button>'
+          + ' <button class="mini" data-chapter-tree="' + esc(row.chapterId) + '">详情</button>'
           + '</td></tr>';
       });
       html += '</tbody></table>';
