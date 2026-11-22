@@ -837,12 +837,11 @@
     return [
       { key: 'level', label: '等级与经验', desc: '升级 / 降级，数值按公式重算' },
       { key: 'magia', label: '魔力（Magia）', desc: 'Magia 等级 1-5' },
-      { key: 'revision', label: '极限突破', desc: 'revision 0-3' },
+      { key: 'revision', label: '魔力解放', desc: '已解放次数与命运宝石（每次 +1 结晶槽位）' },
       { key: 'episode', label: '剧情 Episode', desc: '羁绊点与 Episode 等级' },
-      { key: 'gem', label: '命运宝石', desc: '突破与觉醒用的持有数' },
       { key: 'spirit', label: '精神强化', desc: 'Spirit 树（含情感技能）开启 / 关闭' },
       { key: 'attribute', label: '属性强化', desc: '对同属性全体角色生效的 HP / 攻 / 防' },
-      { key: 'awake', label: '觉醒与突破', desc: '升星条件、命运宝石与突破阶段' },
+      { key: 'awake', label: '觉醒（升星）', desc: '升星链、素材与觉醒费用' },
       { key: 'story', label: '剧情（角色 / 衣装）', desc: '角色剧情与衣装剧情的通关状态' },
       { key: 'costume', label: '衣装', desc: '衣装获取状态与当前穿着' },
       { key: 'skin', label: '外观', desc: '卡面、Live2D、启用状态' },
@@ -900,11 +899,15 @@ if (panel === 'magia') {
       return html + '</section>';
     }
     if (panel === 'revision') {
-      return '<section class="panel"><h2>极限突破（revision） <span class="tag ok">可回退</span></h2>'
-        + charaRow('突破阶段', card.revision,
+      var cap = 1 + (card.revision || 0);
+      return '<section class="panel"><h2>魔力解放（revision） <span class="tag ok">可回退</span></h2>'
+        + charaRow('已解放次数（revision）', card.revision,
           { op: 'card.set', id: d.userCardId, field: 'revision' },
           [[0, '0'], [1, '1'], [2, '2'], [3, '3']])
-        + '<p class="small">游戏内消耗命运宝石，这里直接改阶段。</p></section>';
+        + charaRow('命运宝石（lbItemNum）', d.chara.lbItemNum,
+          { op: 'chara.set', userCardId: d.userCardId, field: 'lbItemNum' })
+        + '<p class="small">每次魔力解放消耗命运宝石，记忆结晶槽位 = 1 + 已解放次数，最多 4 位'
+        + '（当前 ' + esc(Math.min(4, cap)) + ' 位）。图标：' + thumb(d.gemIcon, '命运宝石', 'gemIcon') + '</p></section>';
     }
     if (panel === 'episode') {
       return '<section class="panel"><h2>剧情（Episode） <span class="tag ok">可回退</span></h2>'
@@ -914,12 +917,7 @@ if (panel === 'magia') {
         + (d.episode.next ? '，下一级需要 ' + esc(d.episode.next) + ' 羁绊点' : '，已满级')
         + '；阈值 ' + esc((d.episode.thresholds || []).join(' / ')) + '</p></section>';
     }
-    if (panel === 'gem') {
-      return '<section class="panel"><h2>命运宝石 <span class="tag ok">可回退</span></h2>'
-        + charaRow('持有数（lbItemNum）', d.chara.lbItemNum,
-          { op: 'chara.set', userCardId: d.userCardId, field: 'lbItemNum' })
-        + '<p class="small">用于极限突破与觉醒。图标：' + thumb(d.gemIcon, '命运宝石', 'gemIcon') + '</p></section>';
-    }
+
     if (panel === 'skin') {
       return '<section class="panel"><h2>外观</h2>'
         + charaRow('显示卡面 ID', card.displayCardId,
@@ -1241,25 +1239,8 @@ if (panel === 'magia') {
   function awakePanelHtml(d) {
     var awake = d.awakening || {};
     var card = awake.card || {};
-    var limit = awake.limitBreak || {};
     var evolve = awake.evolve || {};
-    var html = '<section class="panel"><h2>魔力解放（revision，消耗命运宝石，每次 +1 结晶槽位）'
-      + '<span class="spacer"></span><span class="small">当前 ' + esc(card.revision) + ' / 3 · 命运宝石 '
-      + esc(card.lbItemNum) + '（每次需要 ' + esc(limit.gems) + '）</span></h2>';
-    html += '<table><thead><tr><th>阶段</th><th>消耗</th><th>战力</th><th>状态</th></tr></thead><tbody>';
-    (limit.steps || []).forEach(function (step) {
-      html += '<tr><td class="num">' + esc(step.from) + ' → ' + esc(step.to) + '</td>'
-        + '<td class="num">' + esc(step.cost) + ' CC</td><td class="num">+' + esc(step.force) + '</td><td>'
-        + (step.done ? '<span class="tag ok">已完成</span>' : '<span class="tag">未完成</span>') + '</td></tr>';
-    });
-    html += '</tbody></table>'
-      + '<div class="row"><button class="mini" data-awake-limit="1">突破 +1</button>'
-      + '<button class="mini" data-awake-limit="3">直接到 3</button>'
-      + '<button class="mini" data-awake-set="0">降回 0</button>'
-      + '<span class="small">道具 ' + esc(limit.itemName || limit.item) + ' 持有 ' + esc(limit.itemHave)
-      + '；突破不改命运宝石、道具与魔法石，只写 revision 与总战力。</span></div></section>';
-
-    html += '<section class="panel"><h2>觉醒（升星）'
+    var html = '<section class="panel"><h2>觉醒（升星）'
       + '<span class="spacer"></span><span class="small">' + esc(card.rank) + ' → '
       + esc(evolve.nextRank || '已满星') + '</span></h2>';
     html += '<div class="kvList"><div class="kv"><span>当前卡片</span><strong>' + esc(card.name) + ' #'
@@ -1467,18 +1448,6 @@ function renderCharaDetail() {
         edit([{ op: 'story.set', charaId: d.charaId,
           sectionId: Number(button.getAttribute('data-story-set')),
           cleared: button.getAttribute('data-story-value') === '1' }]);
-      });
-    });
-    $('main').querySelectorAll('[data-awake-limit]').forEach(function (button) {
-      button.addEventListener('click', function () {
-        edit([{ op: 'awake.limit', userCardId: d.userCardId, charaId: d.charaId,
-          count: Number(button.getAttribute('data-awake-limit')) }]);
-      });
-    });
-    $('main').querySelectorAll('[data-awake-set]').forEach(function (button) {
-      button.addEventListener('click', function () {
-        edit([{ op: 'awake.set', userCardId: d.userCardId,
-          value: Number(button.getAttribute('data-awake-set')) }]);
       });
     });
     $('main').querySelectorAll('[data-awake-slot]').forEach(function (button) {
