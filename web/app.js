@@ -3,7 +3,7 @@
   'use strict';
 
   var S = { status: null, tab: 'overview', page: {}, busy: false, piecePicker: null, charaSel: null, charaPanel: null,
-    spiritSel: null, pieceSel: null, deckSel: null,
+    spiritSel: null, pieceSel: null, deckSel: null, chapterMap: null, sectionSel: null,
     pieceFilter: { rank: '', type: '', limit: '', charaId: '' },
     itemsNav: { family: null, group: null }, open: {} };
 
@@ -115,6 +115,8 @@
         S.charaPanel = null;
         S.pieceSel = null;
         S.deckSel = null;
+        S.chapterMap = null;
+        S.sectionSel = null;
         S.spiritSel = null;
         renderTabs();
         render();
@@ -136,6 +138,9 @@
       parts.push(encodeURIComponent(S.pieceSel));
     } else if (S.tab === 'decks' && S.deckSel) {
       parts.push(encodeURIComponent(S.deckSel));
+    } else if (S.tab === 'chapters' && S.chapterMap) {
+      parts.push(encodeURIComponent(S.chapterMap));
+      if (S.sectionSel) { parts.push(encodeURIComponent(S.sectionSel)); }
     }
     return '#/' + parts.join('/');
   }
@@ -159,6 +164,8 @@
     S.charaPanel = (tab === 'charas' && parts[2]) ? parts[2] : null;
     S.pieceSel = (tab === 'pieces' && parts[1]) ? decodeURIComponent(parts[1]) : null;
     S.deckSel = (tab === 'decks' && parts[1]) ? decodeURIComponent(parts[1]) : null;
+    S.chapterMap = (tab === 'chapters' && parts[1]) ? decodeURIComponent(parts[1]) : null;
+    S.sectionSel = (tab === 'chapters' && parts[2]) ? decodeURIComponent(parts[2]) : null;
     SCROLL.key = null;
     SCROLL.y = 0;
     renderTabs();
@@ -2686,17 +2693,196 @@ function renderCharaDetail() {
     });
   }
 
+  function chapterTreeHtml(map) {
+    var nodes = map.nodes || [];
+    if (!nodes.length) { return '<p class="small">这一章没有坐标数据，无法画树。</p>'; }
+    var b = map.bounds || { minX: 0, maxX: 1, minY: 0, maxY: 1 };
+    var cellW = 120, cellH = 92, pad = 44;
+    var cols = Math.max(1, (b.maxX - b.minX) + 1);
+    var rows = Math.max(1, (b.maxY - b.minY) + 1);
+    var w = cols * cellW + pad * 2;
+    var h = rows * cellH + pad * 2;
+    var byId = {};
+    nodes.forEach(function (node) { byId[String(node.sectionId)] = node; });
+    function cx(node) { return pad + (node.x - b.minX) * cellW + cellW / 2; }
+    function cy(node) { return pad + (node.y - b.minY) * cellH + cellH / 2; }
+    var svg = '<svg class="chapterTree" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="xMidYMid meet"><g>';
+    nodes.forEach(function (node) {
+      (node.connect || []).forEach(function (targetId) {
+        var target = byId[String(targetId)];
+        if (!target) { return; }
+        svg += '<line class="treeLink' + (node.cleared ? ' on' : '') + '" x1="' + cx(node) + '" y1="' + cy(node)
+          + '" x2="' + cx(target) + '" y2="' + cy(target) + '"/>';
+      });
+    });
+    nodes.forEach(function (node) {
+      var cls = 'treeNode' + (node.cleared ? ' cleared' : (node.canPlay ? ' open' : ''));
+      if (node.secret) { cls += ' secret'; }
+      svg += '<g class="' + cls + '" data-tree-node="' + esc(node.sectionId) + '" transform="translate('
+        + cx(node) + ',' + cy(node) + ')"><rect x="-50" y="-28" width="100" height="56" rx="9"/>'
+        + '<text class="t" y="-6">' + esc((node.title || '').slice(0, 9)) + '</text>'
+        + '<text class="s" y="14">' + esc(node.questCleared) + '/' + esc(node.questCount) + '</text></g>';
+    });
+    return svg + '</g></svg>';
+  }
+
+  function renderChapterMap() {
+    return api('/api/view/chapter-map?chapterId=' + encodeURIComponent(S.chapterMap)).then(function (map) {
+      var html = '<div class="crumbs"><button class="mini" data-chapter-back>章节一览</button>'
+        + '<span>›</span><span class="small">' + esc(map.chapterNoForView || '') + ' '
+        + esc(map.title || '') + '</span></div>';
+      html += '<section class="panel"><h2>' + esc(map.chapterNoForView || ('章 ' + map.chapterId)) + ' '
+        + esc(map.title || '') + ' <span class="tag">' + esc(map.chapterType || '') + '</span>'
+        + '<span class="spacer"></span><span class="small">小节 ' + esc(map.nodeCount) + '</span></h2>'
+        + '<p class="small">这是游戏里的分支章节：节点按 master 的 pointX / pointY 摆放，连线来自 connectPointIds。'
+        + '点节点切换这一节通关 / 回退（连带它包含的任务）。</p>'
+        + '<div class="row"><button class="mini" data-chapter-clear>整章通关</button>'
+        + '<button class="mini" data-chapter-unlock>整章解锁</button></div>'
+        + chapterTreeHtml(map) + '</section>';
+      html += '<section class="panel"><h2>小节列表</h2><table><thead><tr><th>小节</th><th>标题</th>'
+        + '<th>任务</th><th>状态</th><th>前置</th></tr></thead><tbody>';
+      (map.nodes || []).forEach(function (node) {
+        html += '<tr><td class="num">' + esc(node.sectionId) + '</td><td>' + esc(node.title || '') + '</td>'
+          + '<td class="num">' + esc(node.questCleared) + ' / ' + esc(node.questCount) + '</td><td>'
+          + (node.cleared ? '<span class="tag ok">已通关</span>'
+            : (node.canPlay ? '<span class="tag">已解锁</span>' : '<span class="tag warn">未解锁</span>'))
+          + '</td><td class="small">' + esc((node.requires || []).join(' / ') || '—') + '</td>'
+          + '<td><button class="mini" data-open-section="' + esc(node.sectionId) + '">进入</button></td></tr>';
+      });
+      html += '</tbody></table></section>';
+      $('main').innerHTML = html;
+
+      var back = $('main').querySelector('[data-chapter-back]');
+      back.addEventListener('click', function () {
+        S.chapterMap = null;
+        render();
+      });
+      $('main').querySelector('[data-chapter-clear]').addEventListener('click', function () {
+        edit([{ op: 'chapter.clear', chapterId: map.chapterId, cleared: true }]);
+      });
+      $('main').querySelector('[data-chapter-unlock]').addEventListener('click', function () {
+        edit([{ op: 'chapter.unlock', chapterId: map.chapterId }]);
+      });
+      $('main').querySelectorAll('[data-tree-node]').forEach(function (node) {
+        node.addEventListener('click', function () {
+          S.sectionSel = node.getAttribute('data-tree-node');
+          render();
+        });
+      });
+      $('main').querySelectorAll('[data-open-section]').forEach(function (button) {
+        button.addEventListener('click', function () {
+          S.sectionSel = button.getAttribute('data-open-section');
+          render();
+        });
+      });
+    });
+  }
+
+function renderSectionDetail() {
+    return api('/api/view/section?sectionId=' + encodeURIComponent(S.sectionSel)).then(function (d) {
+      var state = d.cleared ? '已通关' : (d.canPlay ? '已解锁' : '未解锁');
+      var html = '<div class="crumbs"><button class="mini" data-section-back>章节</button>'
+        + '<span>›</span><span class="small">' + esc(d.title || d.sectionId) + '</span></div>';
+      html += '<section class="panel"><h2>' + esc(d.title || ('小节 ' + d.sectionId))
+        + ' <span class="tag">' + esc(d.questType || '') + '</span>'
+        + '<span class="spacer"></span><span class="small">' + esc(d.sectionId) + '</span></h2>'
+        + '<div class="kvList">'
+        + '<div class="kv"><span>状态</span><strong>' + esc(state) + '</strong></div>'
+        + '<div class="kv"><span>前置小节</span><strong>' + esc((d.requires || []).join(' / ') || '—') + '</strong></div>'
+        + '<div class="kv"><span>解锁后开启</span><strong>' + esc((d.unlocks || []).join(' / ') || '—') + '</strong></div>'
+        + '</div><div class="row">'
+        + '<button class="mini" data-section-unlock>解锁（之前全部通关）</button>'
+        + (d.lockable ? '<button class="mini" data-section-lock>锁定（之后全部）</button>'
+          : '<span class="small">第一部第一章第一话不可锁定</span>')
+        + '<button class="mini" data-section-clear>整话通关</button>'
+        + '<button class="mini" data-section-reset>整话回退</button>'
+        + '</div></section>';
+      html += '<section class="panel"><h2>战斗（' + esc((d.quests || []).length) + '）</h2>'
+        + '<table><thead><tr><th>关卡</th><th>通关</th><th>星级</th><th>操作</th></tr></thead><tbody>';
+      (d.quests || []).forEach(function (quest) {
+        var stars = (quest.missions || []).map(function (status, index) {
+          return '<button class="mini star' + (status === 'CLEARED' ? ' on' : '') + '"'
+            + ' data-mission="' + esc(quest.questBattleId) + '" data-index="' + (index + 1) + '"'
+            + ' data-on="' + (status === 'CLEARED' ? '1' : '0') + '" title="'
+            + esc(status || '') + '">★</button>';
+        }).join('');
+        html += '<tr><td class="num">' + esc(quest.questBattleId) + '</td><td>'
+          + (quest.cleared ? '<span class="tag ok">已通关</span>' : '<span class="tag">未通关</span>')
+          + '</td><td>' + stars + '</td><td>'
+          + '<button class="mini" data-quest-toggle="' + esc(quest.questBattleId) + '" data-on="'
+          + (quest.cleared ? '1' : '0') + '">' + (quest.cleared ? '回退' : '通关') + '</button>'
+          + '</td></tr>';
+      });
+      html += '</tbody></table><p class="small">整话通关会把这一节的所有任务置为已通关且三星；'
+        + '星级对应 missionStatus1..3。</p></section>';
+      $('main').innerHTML = html;
+
+      var back = $('main').querySelector('[data-section-back]');
+      if (back) {
+        back.addEventListener('click', function () {
+          S.sectionSel = null;
+          render();
+        });
+      }
+      var unlock = $('main').querySelector('[data-section-unlock]');
+      if (unlock) {
+        unlock.addEventListener('click', function () {
+          edit([{ op: 'story.unlock', sectionId: d.sectionId }]);
+        });
+      }
+      var lock = $('main').querySelector('[data-section-lock]');
+      if (lock) {
+        lock.addEventListener('click', function () {
+          if (!window.confirm('锁定这一节会把它后面的小节一起设为未解锁、未通关，继续？')) { return; }
+          edit([{ op: 'story.lock', sectionId: d.sectionId }]);
+        });
+      }
+      var clear = $('main').querySelector('[data-section-clear]');
+      if (clear) {
+        clear.addEventListener('click', function () {
+          edit([{ op: 'section.clear', sectionId: d.sectionId, cleared: true }]);
+        });
+      }
+      var reset = $('main').querySelector('[data-section-reset]');
+      if (reset) {
+        reset.addEventListener('click', function () {
+          edit([{ op: 'section.clear', sectionId: d.sectionId, cleared: false }]);
+        });
+      }
+      $('main').querySelectorAll('[data-quest-toggle]').forEach(function (button) {
+        button.addEventListener('click', function () {
+          edit([{ op: 'quest.set', questBattleId: Number(button.getAttribute('data-quest-toggle')),
+            cleared: button.getAttribute('data-on') !== '1' }]);
+        });
+      });
+      $('main').querySelectorAll('[data-mission]').forEach(function (button) {
+        button.addEventListener('click', function () {
+          edit([{ op: 'quest.mission', questBattleId: Number(button.getAttribute('data-mission')),
+            index: Number(button.getAttribute('data-index')),
+            status: button.getAttribute('data-on') === '1' ? 'NON_CLEAR' : 'CLEARED' }]);
+        });
+      });
+    });
+  }
+
   function renderChapters() {
+    if (S.sectionSel) { return renderSectionDetail(); }
+    if (S.chapterMap) { return renderChapterMap(); }
     return api('/api/view/chapters').then(function (data) {
       var html = '<div class="toolbar"><button data-clear>全部章节标记已通</button>'
         + '<button data-reset>全部章节标记未通</button><span class="spacer"></span>'
-        + '<span class="small">共 ' + data.total + ' 章（每行可单独切换）</span></div>';
-      html += '<table><thead><tr><th>章节</th><th>标题</th><th>类型</th><th>状态</th></tr></thead><tbody>';
+        + '<span class="small">共 ' + data.total + ' 章 · 带「剧情树」的是分支章</span></div>';
+      html += '<table><thead><tr><th>章节</th><th>标题</th><th>类型</th><th>小节进度</th><th>状态</th><th>操作</th></tr></thead><tbody>';
       data.rows.forEach(function (row) {
-        html += '<tr><td>' + esc(row.no || row.chapterId) + '</td><td>' + esc(row.title || '')
-          + '</td><td class="small">' + esc(row.questType || '') + '</td><td>'
+        html += '<tr><td>' + esc(row.no || row.chapterId) + '</td><td>' + esc(row.title || '') + '</td>'
+          + '<td class="small">' + esc(row.chapterType || row.questType || '') + '</td>'
+          + '<td class="num">' + esc(row.clearedSections) + ' / ' + esc(row.sectionCount) + '</td><td>'
           + '<button class="mini toggle" data-chapter="' + esc(row.chapterId) + '" data-on="'
-          + (row.cleared ? '1' : '0') + '">' + (row.cleared ? '已通' : '未通') + '</button>'
+          + (row.cleared ? '1' : '0') + '">' + (row.cleared ? '已通' : '未通') + '</button></td><td>'
+          + '<button class="mini" data-chapter-run="' + esc(row.chapterId) + '">整章通关</button> '
+          + '<button class="mini" data-chapter-unlock="' + esc(row.chapterId) + '">整章解锁</button>'
+          + ' <button class="mini" data-chapter-tree="' + esc(row.chapterId) + '">'
+          + (row.layoutCount ? '剧情树' : '小节') + '</button>'
           + '</td></tr>';
       });
       html += '</tbody></table>';
@@ -2705,6 +2891,22 @@ function renderCharaDetail() {
         button.addEventListener('click', function () {
           edit([{ op: 'chapter.set', chapterId: Number(button.getAttribute('data-chapter')),
             cleared: button.getAttribute('data-on') !== '1' }]);
+        });
+      });
+      $('main').querySelectorAll('[data-chapter-run]').forEach(function (button) {
+        button.addEventListener('click', function () {
+          edit([{ op: 'chapter.clear', chapterId: Number(button.getAttribute('data-chapter-run')), cleared: true }]);
+        });
+      });
+      $('main').querySelectorAll('[data-chapter-unlock]').forEach(function (button) {
+        button.addEventListener('click', function () {
+          edit([{ op: 'chapter.unlock', chapterId: Number(button.getAttribute('data-chapter-unlock')) }]);
+        });
+      });
+      $('main').querySelectorAll('[data-chapter-tree]').forEach(function (button) {
+        button.addEventListener('click', function () {
+          S.chapterMap = String(button.getAttribute('data-chapter-tree'));
+          render();
         });
       });
       $('main').querySelector('[data-clear]').addEventListener('click', function () {

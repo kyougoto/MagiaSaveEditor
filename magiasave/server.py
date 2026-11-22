@@ -261,6 +261,10 @@ class Handler(BaseHTTPRequestHandler):
                 return {"ok": True, **editor.sections_view(text, offset, limit)}
             if name == "chapters":
                 return {"ok": True, **editor.chapters_view()}
+            if name == "chapter-map":
+                return {"ok": True, **editor.chapter_map(query.get("chapterId"))}
+            if name == "section":
+                return {"ok": True, **editor.section_detail(query.get("sectionId"))}
             if name == "challenges":
                 return {"ok": True, **editor.challenges_view()}
             if name == "gacha":

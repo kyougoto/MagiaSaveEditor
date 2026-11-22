@@ -572,3 +572,20 @@ img.buffMark {
   padding: 0; background: rgba(8, 6, 12, .55); border-radius: 50%;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, .45);
 }
+/* ---- 章节剧情树 ---- */
+svg.chapterTree {
+  width: 100%; height: auto; max-height: 620px; display: block;
+  background: radial-gradient(circle at 30% 30%, #171325 0%, #0d0b13 75%);
+  border: 1px solid var(--line); border-radius: 12px; margin: 10px 0;
+}
+svg.chapterTree .treeLink { stroke: #3a3350; stroke-width: 3; }
+svg.chapterTree .treeLink.on { stroke: #8f6bd6; }
+svg.chapterTree .treeNode { cursor: pointer; }
+svg.chapterTree .treeNode rect { fill: #1d1830; stroke: #4b4166; stroke-width: 2; }
+svg.chapterTree .treeNode .t { fill: #cfc6e6; font-size: 15px; text-anchor: middle; }
+svg.chapterTree .treeNode .s { fill: #9d93b8; font-size: 13px; text-anchor: middle; }
+svg.chapterTree .treeNode.cleared rect { fill: #2a1f45; stroke: #b46cff; }
+svg.chapterTree .treeNode.cleared .t { fill: #f0e4ff; }
+svg.chapterTree .treeNode.open rect { stroke: #63d6a0; stroke-dasharray: 5 4; }
+svg.chapterTree .treeNode.secret rect { stroke-dasharray: 2 3; opacity: .85; }
+svg.chapterTree .treeNode:hover rect { stroke: #ffd479; }

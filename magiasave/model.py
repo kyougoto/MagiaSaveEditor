@@ -2018,19 +2018,492 @@ class Editor:
         return {"total": len(rows), "offset": offset, "limit": limit, "rows": rows[offset: offset + limit]}
 
     def chapters_view(self):
+        """全部章节（来自 unlocks.json），带小节进度与是否有剧情树布局。"""
+        data = self.unlocks_catalog()
+        meta_chapters = data.get("chapters") or {}
+        state_rows = {str(row.get("chapterId")): row for row in self.rows("userChapterList")}
+        section_rows = {str(row.get("sectionId")): row for row in self.rows("userSectionList")}
         rows = []
-        for row in self.rows("userChapterList"):
-            meta = self.catalog.chapter(row.get("chapterId"))
+        for key, meta in meta_chapters.items():
+            local = self.catalog.chapter(meta.get("chapterId"))
+            sections = meta.get("sections") or []
+            cleared = sum(1 for sid in sections
+                          if (section_rows.get(str(sid)) or {}).get("cleared") is True)
+            state = state_rows.get(str(meta.get("chapterId"))) or {}
             rows.append({
-                "chapterId": row.get("chapterId"),
-                "no": meta.get("no"),
-                "title": meta.get("title"),
-                "questType": meta.get("questType"),
-                "cleared": row.get("cleared"),
-                "path": "state.userChapterList[chapterId=%s]" % row.get("chapterId"),
+                "chapterId": meta.get("chapterId"),
+                "no": local.get("no") or meta.get("chapterNoForView"),
+                "title": local.get("title") or meta.get("title"),
+                "questType": local.get("questType") or meta.get("questType"),
+                "partNo": meta.get("partNo"),
+                "chapterType": meta.get("chapterType"),
+                "sectionCount": len(sections),
+                "layoutCount": len(meta.get("layout") or []),
+                "present": bool(state),
+                "cleared": state.get("cleared") is True,
+                "clearedSections": cleared,
+                "path": "state.userChapterList[chapterId=%s]" % meta.get("chapterId"),
             })
-        rows.sort(key=lambda row: (row.get("chapterId") or 0))
+        rows.sort(key=lambda row: (row.get("partNo") or 0, row.get("chapterId") or 0))
         return {"total": len(rows), "rows": rows}
+
+    def _op_section_clear(self, profile, op, _force, extra):
+        """整节通关 / 回退：小节与它包含的任务一起处理。"""
+        section_id = _int(op.get("sectionId"), "sectionId", 1)
+        cleared = _bool(op.get("cleared"), "cleared")
+        data = self.unlocks_catalog()
+        rules = (data.get("bySection") or {}).get(str(section_id)) or {}
+        stamp = self.stamp()
+        changed = self._ensure_section(profile, section_id, cleared, stamp)
+        for qid in rules.get("requiredQuestIds") or []:
+            if self._ensure_quest(profile, qid, cleared, stamp):
+                changed = True
+        if not changed:
+            raise ValidationError("这一节已经是目标状态", code="already_present")
+        self._normalize_story(profile)
+        extra.add("state.userSectionList")
+        extra.add("state.userQuestBattleList")
+
+    ROOT_SECTIONS = (101101,)
+
+    def _story_graph(self, data):
+        by_section = data.get("bySection") or {}
+        successors = {}
+        for key, row in by_section.items():
+            for target in row.get("unlockSections") or []:
+                successors.setdefault(str(int(target)), set()).add(int(key))
+        return by_section, data.get("prerequisites") or {}, successors
+
+    def _is_branch_section(self, data, section_id):
+        rules = (data.get("bySection") or {}).get(str(section_id)) or {}
+        chapter = (data.get("chapters") or {}).get(str(rules.get("chapterId"))) or {}
+        return chapter.get("chapterType") == "BRANCH"
+
+    def section_detail(self, section_id):
+        """三级页面：一节下面挂的任务（含三星状态）。"""
+        data = self.unlocks_catalog()
+        rules = (data.get("bySection") or {}).get(str(section_id)) or {}
+        section_row = None
+        for row in self.rows("userSectionList"):
+            if str(row.get("sectionId")) == str(section_id):
+                section_row = row
+                break
+        quest_rows = {str(row.get("questBattleId")): row for row in self.rows("userQuestBattleList")}
+        quests = []
+        for qid in rules.get("requiredQuestIds") or []:
+            row = quest_rows.get(str(qid)) or {}
+            quests.append({
+                "questBattleId": qid,
+                "present": bool(row),
+                "cleared": row.get("cleared") is True,
+                "clearCount": row.get("clearCount"),
+                "missions": [row.get("missionStatus%d" % index) for index in range(1, 4)],
+            })
+        meta = self.catalog.section(section_id)
+        return {
+            "sectionId": section_id,
+            "title": meta.get("title") or ((rules.get("title") if isinstance(rules, dict) else None)),
+            "area": meta.get("area"),
+            "questType": meta.get("questType"),
+            "present": bool(section_row),
+            "canPlay": (section_row or {}).get("canPlay"),
+            "cleared": (section_row or {}).get("cleared") is True,
+            "lockable": int(section_id) not in self.ROOT_SECTIONS,
+            "quests": quests,
+            "requires": [int(x) for x in (data.get("prerequisites") or {}).get(str(section_id)) or []],
+            "unlocks": [int(x) for x in rules.get("unlockSections") or []],
+        }
+
+    def _normalize_story(self, profile):
+        """将剧情/关卡状态收拂到「正常游戏能达到」的范围（只向下回退，不会无端补通关）：
+        前置没通关 → 本节不能保持已通关/已解锁；本节已通关 → 它里面的任务补成已通关；
+        任务已通关但小节未通关 → 把任务回退。"""
+        data = self.unlocks_catalog()
+        by_section = data.get("bySection") or {}
+        prereq = data.get("prerequisites") or {}
+        section_rows = profile["state"].setdefault("userSectionList", [])
+        quest_rows = profile["state"].setdefault("userQuestBattleList", [])
+        sindex = {str(row.get("sectionId")): row for row in section_rows}
+        qindex = {str(row.get("questBattleId")): row for row in quest_rows}
+        quest_owner = {}
+        for sid, rules in by_section.items():
+            for qid in rules.get("requiredQuestIds") or []:
+                quest_owner[str(qid)] = sid
+        changed = 0
+        for _ in range(32):
+            round_changed = 0
+            for sid, row in list(sindex.items()):
+                deps = [str(int(dep)) for dep in prereq.get(sid) or []]
+                ready = all((sindex.get(dep) or {}).get("cleared") is True for dep in deps)
+                if row.get("cleared") is True and not ready:
+                    row["cleared"] = False
+                    round_changed += 1
+                if deps and row.get("canPlay") is True and not ready:
+                    row["canPlay"] = False
+                    round_changed += 1
+                if row.get("cleared") is True:
+                    if row.get("canPlay") is not True:
+                        row["canPlay"] = True
+                        round_changed += 1
+                    for qid in (by_section.get(sid) or {}).get("requiredQuestIds") or []:
+                        qrow = qindex.get(str(qid))
+                        if qrow is None or qrow.get("cleared") is True:
+                            continue
+                        qrow["cleared"] = True
+                        qrow["clearCount"] = max(1, int(qrow.get("clearCount") or 0))
+                        round_changed += 1
+            for qid, qrow in list(qindex.items()):
+                if qrow.get("cleared") is not True:
+                    continue
+                sid = quest_owner.get(qid)
+                srow = sindex.get(sid) if sid else None
+                if srow is not None and srow.get("cleared") is not True:
+                    qrow["cleared"] = False
+                    qrow["clearCount"] = 0
+                    for index in range(1, 4):
+                        qrow["missionStatus%d" % index] = MISSION_NOT_CLEAR
+                    round_changed += 1
+            changed += round_changed
+            if not round_changed:
+                break
+        return changed
+
+    def _op_story_unlock(self, profile, op, _force, extra):
+        """解锁这一节：把它之前的所有前置小节一起解锁并通关。"""
+        section_id = _int(op.get("sectionId"), "sectionId", 1)
+        data = self.unlocks_catalog()
+        by_section, prereq, _successors = self._story_graph(data)
+        if str(section_id) not in by_section:
+            raise ValidationError("没有这一节的解锁数据", code="path_missing")
+        needed, stack = set(), [section_id]
+        while stack:
+            sid = stack.pop()
+            for dep in prereq.get(str(sid)) or []:
+                dep = int(dep)
+                if dep not in needed:
+                    needed.add(dep)
+                    stack.append(dep)
+        stamp = self.stamp()
+        order = self._chapter_topology(data, sorted(needed | {section_id}))
+        for sid in order:
+            self._ensure_section(profile, sid, True, stamp)
+            for qid in (by_section.get(str(sid)) or {}).get("requiredQuestIds") or []:
+                self._ensure_quest(profile, qid, True, stamp)
+        self._normalize_story(profile)
+        extra.add("state.userSectionList")
+        extra.add("state.userQuestBattleList")
+
+    def _op_story_lock(self, profile, op, _force, extra):
+        """锁定这一节：后续全部锁定，并把前一关设为未通关。"""
+        section_id = _int(op.get("sectionId"), "sectionId", 1)
+        if section_id in self.ROOT_SECTIONS:
+            raise ValidationError("第一部第一章第一话不能锁定", code="root_section_locked")
+        data = self.unlocks_catalog()
+        by_section, prereq, _successors = self._story_graph(data)
+        if str(section_id) not in by_section:
+            raise ValidationError("没有这一节的解锁数据", code="path_missing")
+        following, stack = set(), [section_id]
+        while stack:
+            sid = stack.pop()
+            for child in (by_section.get(str(sid)) or {}).get("unlockSections") or []:
+                child = int(child)
+                if child not in following:
+                    following.add(child)
+                    stack.append(child)
+        stamp = self.stamp()
+        for sid in sorted(following | {section_id}):
+            self._ensure_section(profile, sid, False, stamp, can_play=False)
+            for qid in (by_section.get(str(sid)) or {}).get("requiredQuestIds") or []:
+                self._ensure_quest(profile, qid, False, stamp)
+        for dep in prereq.get(str(section_id)) or []:
+            self._ensure_section(profile, int(dep), False, stamp)
+        self._normalize_story(profile)
+        extra.add("state.userSectionList")
+        extra.add("state.userQuestBattleList")
+
+    def unlocks_catalog(self):
+        return self._data("unlocks.json", {"bySection": {}, "prerequisites": {}, "chapters": {}})
+
+    def _chapter_topology(self, data, section_ids):
+        """按 unlocks.json 的前置关系做拓扑排序；成环时按 sectionId 收尾，不会死循环。"""
+        ids = [int(x) for x in section_ids]
+        idset = set(ids)
+        prereq = data.get("prerequisites") or {}
+        order, done, visiting = [], set(), set()
+
+        def visit(sid):
+            if sid in done:
+                return
+            if sid in visiting:
+                return
+            visiting.add(sid)
+            for dep in prereq.get(str(sid)) or []:
+                dep = int(dep)
+                if dep in idset:
+                    visit(dep)
+            visiting.discard(sid)
+            done.add(sid)
+            order.append(sid)
+
+        for sid in sorted(ids):
+            visit(sid)
+        return order
+
+    def chapter_map(self, chapter_id):
+        """分支章的剧情树：坐标 + 连线 + 每节状态（游戏里 MainQuestBranch 用的就是这套数据）。"""
+        data = self.unlocks_catalog()
+        chapter = (data.get("chapters") or {}).get(str(chapter_id))
+        if not chapter:
+            raise ValidationError("没有章节 %s 的数据" % chapter_id, code="path_missing")
+        layout = chapter.get("layout") or []
+        if not layout:
+            # 线性章：没有坐标，按小节顺序列出
+            for sid in chapter.get("sections") or []:
+                meta = self.catalog.section(sid)
+                layout.append({"sectionId": sid, "title": meta.get("title"), "x": None, "y": None,
+                               "connect": [], "iconId": None, "parameter": None, "secret": False})
+        section_rows = {str(row.get("sectionId")): row for row in self.rows("userSectionList")}
+        quest_rows = {str(row.get("questBattleId")): row for row in self.rows("userQuestBattleList")}
+        by_section = data.get("bySection") or {}
+        prereq = data.get("prerequisites") or {}
+        nodes = []
+        for item in layout:
+            sid = str(item.get("sectionId"))
+            section_row = section_rows.get(sid) or {}
+            rules = by_section.get(sid) or {}
+            quests = []
+            for qid in rules.get("requiredQuestIds") or []:
+                row = quest_rows.get(str(qid)) or {}
+                quests.append({"questBattleId": qid, "present": bool(row),
+                               "cleared": row.get("cleared") is True})
+            nodes.append({
+                "sectionId": item.get("sectionId"),
+                "title": item.get("title"),
+                "x": item.get("x"),
+                "y": item.get("y"),
+                "connect": item.get("connect") or [],
+                "iconId": item.get("iconId"),
+                "parameter": item.get("parameter"),
+                "secret": bool(item.get("secret")),
+                "present": bool(section_row),
+                "canPlay": section_row.get("canPlay"),
+                "cleared": section_row.get("cleared") is True,
+                "questCount": len(quests),
+                "questCleared": sum(1 for quest in quests if quest["cleared"]),
+                "requires": [int(x) for x in (prereq.get(sid) or [])],
+            })
+        if nodes:
+            xs = [node["x"] for node in nodes if isinstance(node.get("x"), int)]
+            ys = [node["y"] for node in nodes if isinstance(node.get("y"), int)]
+            bounds = {"minX": min(xs) if xs else 0, "maxX": max(xs) if xs else 0,
+                      "minY": min(ys) if ys else 0, "maxY": max(ys) if ys else 0,
+                      "pixel": (max(xs) > 200 if xs else False)}
+        else:
+            bounds = {"minX": 0, "maxX": 0, "minY": 0, "maxY": 0, "pixel": False}
+        return {
+            "chapterId": chapter_id,
+            "title": chapter.get("title"),
+            "chapterNoForView": chapter.get("chapterNoForView"),
+            "chapterType": chapter.get("chapterType"),
+            "partNo": chapter.get("partNo"),
+            "nodeCount": len(nodes),
+            "nodes": nodes,
+            "bounds": bounds,
+            "order": self._chapter_topology(data, [item.get("sectionId") for item in layout]),
+        }
+
+    def _ensure_section(self, profile, section_id, cleared, stamp, can_play=None):
+        if can_play is None:
+            can_play = True if cleared else None
+        rows = profile["state"].setdefault("userSectionList", [])
+        for row in rows:
+            if str(row.get("sectionId")) == str(section_id):
+                changed = False
+                if row.get("cleared") is not cleared:
+                    row["cleared"] = cleared
+                    changed = True
+                if can_play is not None and row.get("canPlay") is not can_play:
+                    row["canPlay"] = can_play
+                    changed = True
+                return changed
+        rows.append({
+            "userId": profile["state"]["gameUser"]["userId"],
+            "sectionId": section_id,
+            "canPlay": True,
+            "cleared": cleared,
+            "createdAt": stamp,
+        })
+        return True
+
+    def _ensure_quest(self, profile, quest_id, cleared, stamp):
+        rows = profile["state"].setdefault("userQuestBattleList", [])
+        for row in rows:
+            if str(row.get("questBattleId")) == str(quest_id):
+                changed = False
+                if row.get("cleared") is not cleared:
+                    row["cleared"] = cleared
+                    changed = True
+                want = max(1, int(row.get("clearCount") or 0)) if cleared else 0
+                if int(row.get("clearCount") or 0) != want:
+                    row["clearCount"] = want
+                    changed = True
+                for index in range(1, 4):
+                    key = "missionStatus%d" % index
+                    if row.get(key) in (MISSION_CLEARED, MISSION_NOT_CLEAR):
+                        value = MISSION_CLEARED if cleared else MISSION_NOT_CLEAR
+                        if row.get(key) != value:
+                            row[key] = value
+                            changed = True
+                return changed
+        if not cleared:
+            return False
+        rows.append({
+            "userId": profile["state"]["gameUser"]["userId"],
+            "questBattleId": int(quest_id),
+            "cleared": True,
+            "clearCount": 1,
+            "rewardDone": False,
+            "maxDamage": 0,
+            "missionStatus1": MISSION_CLEARED,
+            "missionStatus2": MISSION_CLEARED,
+            "missionStatus3": MISSION_CLEARED,
+            "createdAt": stamp,
+        })
+        return True
+
+    def _op_chapter_clear(self, profile, op, _force, extra):
+        """整章通关/解锁：按拓扑序处理，通关时把该章之前的前置小节一并解锁。"""
+        chapter_id = _int(op.get("chapterId"), "chapterId", 1)
+        cleared = _bool(op.get("cleared"), "cleared")
+        data = self.unlocks_catalog()
+        chapter = (data.get("chapters") or {}).get(str(chapter_id))
+        if not chapter:
+            raise ValidationError("没有章节 %s 的数据" % chapter_id, code="path_missing")
+        by_section = data.get("bySection") or {}
+        prereq = data.get("prerequisites") or {}
+        chapters_meta = data.get("chapters") or {}
+        chapter_prereq = data.get("chapterPrerequisites") or {}
+        targets = set(int(x) for x in chapter.get("sections") or [])
+        if not targets:
+            raise ValidationError("章节 %s 没有小节数据" % chapter_id, code="path_missing")
+        needed = set(targets)
+        if cleared:
+            # 章级前置：下一章要求上一章全通（分支章也一样）
+            chapter_queue = [chapter_id]
+            seen_chapters = {chapter_id}
+            while chapter_queue:
+                current = chapter_queue.pop()
+                deps = chapter_prereq.get(str(current)) or []
+                if not deps:
+                    meta = chapters_meta.get(str(current)) or {}
+                    part = meta.get("partNo")
+                    number = meta.get("chapterNo")
+                    if part is not None and number:
+                        for other_key, other in chapters_meta.items():
+                            if other.get("partNo") == part and other.get("chapterNo") == number - 1:
+                                deps = [int(other_key)]
+                                break
+                for dep in deps:
+                    dep = int(dep)
+                    if dep in seen_chapters:
+                        continue
+                    seen_chapters.add(dep)
+                    chapter_queue.append(dep)
+                    dep_meta = chapters_meta.get(str(dep)) or {}
+                    needed |= set(int(x) for x in dep_meta.get("sections") or [])
+            stack = list(needed)
+        if not cleared:
+            stack = list(targets)
+        while stack:
+            sid = stack.pop()
+            if sid in needed:
+                pass
+            for dep in prereq.get(str(sid)) or []:
+                dep = int(dep)
+                if dep not in needed:
+                    needed.add(dep)
+                    stack.append(dep)
+        order = self._chapter_topology(data, sorted(needed))
+        stamp = self.stamp()
+        touched = 0
+        for sid in order:
+            if self._ensure_section(profile, sid, cleared, stamp):
+                touched += 1
+            rules = by_section.get(str(sid)) or {}
+            for qid in rules.get("requiredQuestIds") or []:
+                if self._ensure_quest(profile, qid, cleared, stamp):
+                    touched += 1
+        if not touched:
+            raise ValidationError("这些小节已经是目标状态", code="already_present")
+        extra.add("state.userSectionList")
+        extra.add("state.userQuestBattleList")
+
+    def _op_chapter_unlock_only(self, profile, op, _force, extra):
+        """只解锁不判通关：把该章及前置小节设为 canPlay=true。"""
+        chapter_id = _int(op.get("chapterId"), "chapterId", 1)
+        data = self.unlocks_catalog()
+        chapter = (data.get("chapters") or {}).get(str(chapter_id))
+        if not chapter:
+            raise ValidationError("没有章节 %s 的数据" % chapter_id, code="path_missing")
+        prereq = data.get("prerequisites") or {}
+        chapters_meta = data.get("chapters") or {}
+        chapter_prereq = data.get("chapterPrerequisites") or {}
+        needed = set(int(x) for x in chapter.get("sections") or [])
+        # 章级前置章的所有小节都要先通关
+        chapter_queue = [chapter_id]
+        seen_chapters = {chapter_id}
+        while chapter_queue:
+            current = chapter_queue.pop()
+            deps = chapter_prereq.get(str(current)) or []
+            if not deps:
+                meta = chapters_meta.get(str(current)) or {}
+                part = meta.get("partNo")
+                number = meta.get("chapterNo")
+                if part is not None and number:
+                    for other_key, other in chapters_meta.items():
+                        if other.get("partNo") == part and other.get("chapterNo") == number - 1:
+                            deps = [int(other_key)]
+                            break
+            for dep in deps:
+                dep = int(dep)
+                if dep in seen_chapters:
+                    continue
+                seen_chapters.add(dep)
+                chapter_queue.append(dep)
+                dep_meta = chapters_meta.get(str(dep)) or {}
+                for sid in dep_meta.get("sections") or []:
+                    needed.add(int(sid))
+                    for dep2 in prereq.get(str(sid)) or []:
+                        needed.add(int(dep2))
+        stack = [int(x) for x in chapter.get("sections") or []]
+        while stack:
+            sid = stack.pop()
+            for dep in prereq.get(str(sid)) or []:
+                dep = int(dep)
+                if dep not in needed:
+                    needed.add(dep)
+                    stack.append(dep)
+        stamp = self.stamp()
+        rows = profile["state"].setdefault("userSectionList", [])
+        index = {str(row.get("sectionId")): row for row in rows}
+        touched = 0
+        for sid in sorted(needed):
+            row = index.get(str(sid))
+            if row is None:
+                rows.append({
+                    "userId": profile["state"]["gameUser"]["userId"],
+                    "sectionId": sid,
+                    "canPlay": True,
+                    "cleared": False,
+                    "createdAt": stamp,
+                })
+                touched += 1
+            elif row.get("canPlay") is not True:
+                row["canPlay"] = True
+                touched += 1
+        if not touched:
+            raise ValidationError("这些小节已经解锁", code="already_present")
+        extra.add("state.userSectionList")
 
     CHALLENGE_TABLES = (
         ("userDailyChallengeList", "每日挑战"),
