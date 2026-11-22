@@ -2069,6 +2069,23 @@ class Editor:
         rows.sort(key=lambda row: (row.get("sectionId") or 0))
         return {"total": len(rows), "offset": offset, "limit": limit, "rows": rows[offset: offset + limit]}
 
+    @staticmethod
+    def _is_side_chapter(part, chapter_id):
+        """第一部支线是 52..60，第二部支线是 71..81（主线是 11..20 / 21..33）。"""
+        if part == 1:
+            return int(chapter_id or 0) >= 50
+        if part == 2:
+            return int(chapter_id or 0) >= 70
+        return False
+
+    @classmethod
+    def _chapter_group(cls, part, chapter_id):
+        if part == 1:
+            return "第一部 · 支线" if cls._is_side_chapter(part, chapter_id) else "第一部 · 主线"
+        if part == 2:
+            return "第二部 · 支线" if cls._is_side_chapter(part, chapter_id) else "第二部 · 主线"
+        return "其他（外传 / 活动）"
+
     def chapters_view(self):
         """全部章节（来自 unlocks.json），带小节进度与是否有剧情树布局。"""
         data = self.unlocks_catalog()
@@ -2091,7 +2108,8 @@ class Editor:
                 "title": local.get("title") or meta.get("title"),
                 "questType": local.get("questType") or meta.get("questType"),
                 "partNo": meta.get("partNo"),
-                "partLabel": {1: "第一部", 2: "第二部"}.get(                    meta.get("partNo"), "其他（外传 / 活动）"),
+                "partLabel": self._chapter_group(meta.get("partNo"), meta.get("chapterId")),
+                "isSideStory": self._is_side_chapter(meta.get("partNo"), meta.get("chapterId")),
                 "chapterType": meta.get("chapterType"),
                 "sectionCount": len(sections),
                 "requiredCount": len(required),
