@@ -54,6 +54,7 @@ def main(argv=None):
                     "name": skill.get("name"),
                     "description": skill.get("shortDescription"),
                     "type": skill.get("type"),
+                    "attribute": skill.get("viewAttributeId") or "ALL",
                 }
         local = zh.get(str(formation_id)) or {}
         formations[str(formation_id)] = {

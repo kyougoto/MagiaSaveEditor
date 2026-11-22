@@ -1802,7 +1802,8 @@ function renderCharaDetail() {
       var cls = 'boardCell' + (item ? ' ' + item.kind : '') + (buff ? ' effective' : '');
       var inner = '<span class="pos">' + slot + '</span>';
       if (buff) {
-        inner += '<span class="buffMark" title="' + esc(buff.description || buff.name || '') + '">强</span>';
+        inner += '<img class="buffMark" src="' + esc(attrIconUrl(buff.attribute))
+          + '" title="' + esc(buff.description || buff.name || '') + '" alt="' + esc(buff.attribute || '') + '">';
       }
       if (item && item.userCardId) {
         inner += '<img class="boardFace" loading="lazy" src="' + esc(item.face || item.icon)
@@ -1816,6 +1817,11 @@ function renderCharaDetail() {
       html += '<div class="' + cls + '">' + inner + '</div>';
     });
     return html + '</div>';
+  }
+
+  function attrIconUrl(attribute) {
+    var key = String(attribute || 'ALL').toLowerCase();
+    return '/assets/attr/' + key + '.png';
   }
 
   function formationBuffListHtml(deck) {
@@ -2156,7 +2162,8 @@ function renderCharaDetail() {
       if (isCurrent) { cls += ' current'; }
       html += '<div class="' + cls + '"><span class="pos">' + slot + '</span>';
       if (buff) {
-        html += '<span class="buffMark" title="' + esc(buff.description || buff.name || '') + '">强</span>';
+        html += '<img class="buffMark" src="' + esc(attrIconUrl(buff.attribute))
+          + '" title="' + esc(buff.description || buff.name || '') + '" alt="' + esc(buff.attribute || '') + '">';
       }
       if (isHelper) { html += '<span class="who">支援位</span>'; }
       else if (member) { html += '<span class="who">' + esc(member.name || '') + '</span>'; }

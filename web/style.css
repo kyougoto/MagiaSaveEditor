@@ -565,3 +565,10 @@ img.faceAvatar {
   color: #241a05; background: #ffd479; font-weight: 700;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, .45);
 }
+/* ---- 强化格角标：游戏内属性图 ---- */
+img.buffMark {
+  position: absolute; top: 3px; right: 3px; z-index: 3;
+  width: 20px; height: 20px; object-fit: contain;
+  padding: 0; background: rgba(8, 6, 12, .55); border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .45);
+}
