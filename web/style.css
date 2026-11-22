@@ -649,3 +649,13 @@ button.lr-map-node.lr-required::after {
   content: '必';
   left: 2px; bottom: 1px; padding: 1px 3px; font-size: 8px; border-radius: 4px;
 }
+/* ---- 星级按钮：亮=已获得，暗=未获得 ---- */
+button.mini.star {
+  color: #6b6280; background: #1a1626; border-color: #3a3350;
+  font-size: 14px; line-height: 1; padding: 2px 6px; opacity: .55;
+}
+button.mini.star.on {
+  color: #ffd479; background: #2b2213; border-color: #ffd479; opacity: 1;
+  text-shadow: 0 0 6px rgba(255, 212, 121, .55);
+}
+button.mini.star:hover { opacity: 1; border-color: #ffd479; }

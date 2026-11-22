@@ -2099,6 +2099,9 @@ class Editor:
             required = meta.get("requiredSections") or []
             cleared = sum(1 for sid in sections
                           if (section_rows.get(str(sid)) or {}).get("cleared") is True)
+            by_section = data.get("bySection") or {}
+            quest_total = sum(len((by_section.get(str(sid)) or {}).get("requiredQuestIds") or [])
+                             for sid in sections)
             required_cleared = sum(1 for sid in required
                                    if (section_rows.get(str(sid)) or {}).get("cleared") is True)
             state = state_rows.get(str(meta.get("chapterId"))) or {}
@@ -2114,6 +2117,8 @@ class Editor:
                 "sectionCount": len(sections),
                 "requiredCount": len(required),
                 "requiredCleared": required_cleared,
+                "hasQuests": quest_total > 0,
+                "questTotal": quest_total,
                 "layoutCount": len(meta.get("layout") or []),
                 "present": bool(state),
                 "cleared": state.get("cleared") is True,
@@ -2421,6 +2426,7 @@ class Editor:
             "chapterType": chapter.get("chapterType"),
             "partNo": chapter.get("partNo"),
             "nodeCount": len(nodes),
+            "hasQuests": any(node.get("questCount") for node in nodes),
             "hasLayout": any(isinstance(node.get("x"), int) and isinstance(node.get("y"), int)
                              for node in nodes),
             "nodes": nodes,

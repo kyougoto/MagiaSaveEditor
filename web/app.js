@@ -2749,8 +2749,10 @@ function renderCharaDetail() {
         + '点节点进入这一节。</p>'
         + '<p class="small policyNote">本章 ' + esc(map.nodeCount) + ' 节，标「必需」的是开出下一章的最小集。'
         + '<b>整章通关</b> = 全部小节；<b>整章解锁</b> = 只补最小集。</p>'
-        + '<div class="row"><button class="mini" data-chapter-clear title="把本章所有小节（含不在最小集里的分支）都设为已通关">整章通关（全部）</button>'
+        + '<div class="row"><button class="mini" data-chapter-clear title="把本章所有小节（含不在最小集里的分支）都设为已通关">'
+        + (map.hasQuests ? '整章通关（全部）' : '剧情通关（全部）') + '</button>'
         + '<button class="mini" data-chapter-unlock title="只补开出下一章所需的最小集">整章解锁（最小集）</button></div>'
+        + (map.hasQuests ? '' : '<p class="small">这一章没有战斗关卡，通关状态只写小节本身（纯剧情）。</p>')
         + (map.hasLayout
           ? '<div class="treeWrap">' + chapterTreeHtml(map) + '</div>'
           : '<p class="small">这一章是线性结构，没有地图坐标，直接看下面的小节列表。</p>')
@@ -2813,8 +2815,12 @@ function renderSectionDetail() {
         + '<button class="mini" data-section-clear>整话通关</button>'
         + '<button class="mini" data-section-reset>整话回退</button>'
         + '</div></section>';
-      html += '<section class="panel"><h2>战斗（' + esc((d.quests || []).length) + '）</h2>'
-        + '<table><thead><tr><th>关卡</th><th>通关</th><th>星级</th><th>操作</th></tr></thead><tbody>';
+      if (!(d.quests || []).length) {
+        html += '<section class="panel"><h2>剧情</h2>'
+          + '<p class="small">这一节是纯剧情，没有战斗关卡；「通关」只写小节自身的 cleared。</p></section>';
+      } else {
+        html += '<section class="panel"><h2>战斗（' + esc(d.quests.length) + '）</h2>'
+          + '<table><thead><tr><th>关卡</th><th>通关</th><th>星级</th><th>操作</th></tr></thead><tbody>';
       (d.quests || []).forEach(function (quest) {
         var stars = (quest.missions || []).map(function (status, index) {
           return '<button class="mini star' + (status === 'CLEARED' ? ' on' : '') + '"'
@@ -2829,8 +2835,9 @@ function renderSectionDetail() {
           + (quest.cleared ? '1' : '0') + '">' + (quest.cleared ? '回退' : '通关') + '</button>'
           + '</td></tr>';
       });
-      html += '</tbody></table><p class="small">整话通关会把这一节的所有任务置为已通关且三星；'
-        + '星级对应 missionStatus1..3。</p></section>';
+        html += '</tbody></table><p class="small">整话通关会把这一节的所有任务置为已通关且三星；'
+          + '星级对应 missionStatus1..3。</p></section>';
+      }
       $('main').innerHTML = html;
 
       var back = $('main').querySelector('[data-section-back]');
@@ -2906,13 +2913,15 @@ function renderSectionDetail() {
           + '<table><thead><tr><th>章节</th><th>标题</th><th>类型</th><th>小节进度</th><th>状态</th><th>操作</th></tr></thead><tbody>';
         group.rows.forEach(function (row) {
           html += '<tr><td>' + esc(row.no || row.chapterId) + '</td><td>' + esc(row.title || '') + '</td>'
-            + '<td class="small">' + esc(row.chapterType || row.questType || '') + '</td>'
+            + '<td class="small">' + esc(row.chapterType || row.questType || '')
+          + (row.hasQuests ? '' : ' <span class="tag warn">纯剧情</span>') + '</td>'
             + '<td class="num">' + esc(row.clearedSections) + ' / ' + esc(row.sectionCount)
             + (row.requiredCount ? '<span class="small">（必需 ' + esc(row.requiredCleared) + '/'
               + esc(row.requiredCount) + '）</span>' : '') + '</td><td>'
             + '<button class="mini toggle" data-chapter="' + esc(row.chapterId) + '" data-on="'
             + (row.cleared ? '1' : '0') + '">' + (row.cleared ? '已通' : '未通') + '</button></td><td>'
-            + '<button class="mini" data-chapter-run="' + esc(row.chapterId) + '">整章通关</button> '
+            + '<button class="mini" data-chapter-run="' + esc(row.chapterId) + '">'
+            + (row.hasQuests ? '整章通关' : '剧情通关') + '</button> '
             + '<button class="mini" data-chapter-unlock="' + esc(row.chapterId) + '">整章解锁</button>'
             + ' <button class="mini" data-chapter-tree="' + esc(row.chapterId) + '">详情</button>'
             + '</td></tr>';
