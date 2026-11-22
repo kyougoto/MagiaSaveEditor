@@ -4,7 +4,7 @@
 
   var S = { status: null, tab: 'overview', page: {}, busy: false, piecePicker: null, charaSel: null, charaPanel: null,
     spiritSel: null, pieceSel: null, deckSel: null,
-    pieceFilter: { rank: '', type: '', limit: '' },
+    pieceFilter: { rank: '', type: '', limit: '', charaId: '' },
     itemsNav: { family: null, group: null }, open: {} };
 
   var TABS = [
@@ -1500,8 +1500,12 @@ function renderCharaDetail() {
       + '&q=' + encodeURIComponent(page.q || '')
       + '&rank=' + encodeURIComponent(filter.rank || '')
       + '&type=' + encodeURIComponent(filter.type || '')
-      + '&limit=' + encodeURIComponent(filter.limit || '');
-    return api(url).then(function (data) {
+      + '&limit=' + encodeURIComponent(filter.limit || '')
+      + '&charaId=' + encodeURIComponent(filter.charaId || '');
+    var charaPromise = api('/api/view/charas?limit=200').catch(function () { return { rows: [] }; });
+    return Promise.all([api(url), charaPromise]).then(function (results) {
+      var data = results[0];
+      var charaRows = (results[1] && results[1].rows) || [];
       var html = '<div class="toolbar"><input type="text" data-search placeholder="搜索结晶名称或 pieceId">'
         + '<select data-rank-filter>' + selectOptions(data.ranks, filter.rank) + '</select>'
         + '<select data-type-filter>' + selectOptions(data.types, filter.type, pieceTypeLabel) + '</select>'
@@ -1509,6 +1513,13 @@ function renderCharaDetail() {
         + '<option value="">限制：全部</option>'
         + '<option value="limited"' + (filter.limit === 'limited' ? ' selected' : '') + '>限制：仅限指定角色</option>'
         + '<option value="free"' + (filter.limit === 'free' ? ' selected' : '') + '>限制：通用</option>'
+        + '</select>'
+        + '<select data-chara-filter><option value="">角色：全部</option>'
+        + charaRows.map(function (row) {
+            return '<option value="' + esc(row.charaId) + '"'
+              + (String(row.charaId) === String(filter.charaId) ? ' selected' : '') + '>'
+              + esc(row.name) + '</option>';
+          }).join('')
         + '</select>'
         + '<button data-add>添加记忆结晶…</button>'
         + '<button data-all-piece>全部等级设为…</button><span class="spacer"></span>'
@@ -1561,6 +1572,14 @@ function renderCharaDetail() {
       if (limitSelect) {
         limitSelect.addEventListener('change', function () {
           filter.limit = limitSelect.value;
+          page.offset = 0;
+          render();
+        });
+      }
+      var charaSelect = $('main').querySelector('[data-chara-filter]');
+      if (charaSelect) {
+        charaSelect.addEventListener('change', function () {
+          filter.charaId = charaSelect.value;
           page.offset = 0;
           render();
         });
