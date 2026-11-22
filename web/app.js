@@ -582,6 +582,7 @@
 
   function renderItems() {
     var nav = S.itemsNav || (S.itemsNav = { family: null, group: null });
+    if (nav.search) { return renderItemList(null); }
     if (!nav.family) { return renderItemFamilies(); }
     if (!nav.group) { return renderItemGroups(nav.family); }
     return renderItemList(nav.group);
@@ -591,6 +592,7 @@
     var scope = (S.itemsNav && S.itemsNav.scope) || 'player';
     return api('/api/view/items-families?scope=' + scope).then(function (data) {
       var html = '<div class="toolbar">' + itemCrumb()
+        + '<input type="text" data-global-search placeholder="全局搜索道具（名称 / itemId），回车确认">'
         + '<select data-scope><option value="player">玩家可见道具</option>'
         + '<option value="all">全部（含内部道具）</option></select>'
         + '<span class="spacer"></span>'
@@ -606,6 +608,17 @@
       html += '</div>';
       $('main').innerHTML = html;
       bindCrumb();
+      var globalSearch = $('main').querySelector('[data-global-search]');
+      if (globalSearch) {
+        globalSearch.addEventListener('keydown', function (event) {
+          if (event.key !== 'Enter') { return; }
+          var term = globalSearch.value.trim();
+          if (!term) { return; }
+          S.itemsNav = { family: null, group: null, scope: 'all', search: term };
+          S.page.items = { offset: 0, q: term, sort: 'qty' };
+          render();
+        });
+      }
       var scopeSelect = $('main').querySelector('[data-scope]');
       if (scopeSelect) {
         scopeSelect.value = scope;
@@ -675,16 +688,21 @@
     var page = pageOf(tabId);
     var limit = 200;
     var sort = page.sort || 'id';
+    var searching = !group && S.itemsNav && S.itemsNav.search;
     var url = '/api/view/items?scope=' + ((S.itemsNav && S.itemsNav.scope) || 'player')
-      + '&group=' + encodeURIComponent(group) + '&offset=' + page.offset
+      + (group ? '&group=' + encodeURIComponent(group) : '')
+      + '&offset=' + page.offset
       + '&limit=' + limit + '&sort=' + sort + '&q=' + encodeURIComponent(page.q || '');
     return api(url).then(function (data) {
       var owned = data.rows.filter(function (row) { return row.owned; }).length;
       var html = '<div class="toolbar">' + itemCrumb()
+        + (searching ? '<span class="small">搜索「' + esc(S.itemsNav.search) + '」</span>'
+          + '<button class="mini" data-search-clear>返回分类</button>' : '')
         + '<input type="text" data-search placeholder="搜索道具名称或 itemId">'
         + '<select data-sort><option value="qty">按数量</option><option value="name">按名称</option>'
         + '<option value="id">按 ID</option></select><span class="spacer"></span>'
-        + '<span class="small">本组 ' + data.total + ' 种（本页已有 ' + owned + ' 种）</span></div>';
+        + '<span class="small">' + (searching ? '匹配 ' : '本组 ') + data.total
+        + ' 种（本页已有 ' + owned + ' 种）</span></div>';
       html += '<div class="grid">';
       data.rows.forEach(function (row) {
         html += tileHtml(
@@ -702,6 +720,14 @@
       bindCrumb();
       searchBox(tabId, '搜索道具', render);
       bindPager(tabId, limit, render);
+      var clearSearch = $('main').querySelector('[data-search-clear]');
+      if (clearSearch) {
+        clearSearch.addEventListener('click', function () {
+          S.itemsNav = { family: null, group: null, scope: 'player' };
+          S.page.items = { offset: 0, q: '', sort: 'id' };
+          render();
+        });
+      }
       var sortSelect = $('main').querySelector('[data-sort]');
       sortSelect.value = sort;
       sortSelect.addEventListener('change', function () {
