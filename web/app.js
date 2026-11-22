@@ -2723,7 +2723,8 @@ function renderCharaDetail() {
     var html = '<div class="lr-map-scroll"><div class="lr-map-canvas" style="width:' + maxX + 'px;height:' + maxY + 'px">'
       + '<svg class="lr-map-edges" width="' + maxX + '" height="' + maxY + '">' + edges + '</svg>';
     nodes.forEach(function (node) {
-      var cls = 'lr-map-node' + (node.cleared ? ' lr-clear' : (node.canPlay ? ' lr-new' : ' lr-locked'));
+      var cls = 'lr-map-node' + (node.cleared ? ' lr-clear' : (node.canPlay ? ' lr-new' : ' lr-locked'))
+        + (node.required ? ' lr-required' : '');
       var status = node.cleared ? 'CLEAR' : (node.canPlay ? 'NEW' : '未解锁');
       html += '<button type="button" class="' + cls + '" data-tree-node="' + esc(node.sectionId)
         + '" style="left:' + px(node) + 'px;top:' + py(node) + 'px" title="'
@@ -2742,10 +2743,12 @@ function renderCharaDetail() {
       html += '<section class="panel"><h2>' + esc(map.chapterNoForView || ('章 ' + map.chapterId)) + ' '
         + esc(map.title || '') + ' <span class="tag">' + esc(map.chapterType || '') + '</span>'
         + '<span class="spacer"></span><span class="small">小节 ' + esc(map.nodeCount) + '</span></h2>'
-        + '<p class="small">这是游戏里的分支章节：节点按 master 的 pointX / pointY 摆放，连线来自 connectPointIds。'
-        + '点节点切换这一节通关 / 回退（连带它包含的任务）。</p>'
-        + '<div class="row"><button class="mini" data-chapter-clear>整章通关</button>'
-        + '<button class="mini" data-chapter-unlock>整章解锁</button></div>'
+        + '<p class="small">节点位置与连线照搬游戏分支地图（LostRecordMap.js：格 66×48、节点 150×94）。'
+        + '点节点进入这一节。</p>'
+        + '<p class="small policyNote">本章 ' + esc(map.nodeCount) + ' 节，标「必需」的是开出下一章的最小集。'
+        + '<b>整章通关</b> = 全部小节；<b>整章解锁</b> = 只补最小集。</p>'
+        + '<div class="row"><button class="mini" data-chapter-clear title="把本章所有小节（含不在最小集里的分支）都设为已通关">整章通关（全部）</button>'
+        + '<button class="mini" data-chapter-unlock title="只补开出下一章所需的最小集">整章解锁（最小集）</button></div>'
         + (map.hasLayout
           ? '<div class="treeWrap">' + chapterTreeHtml(map) + '</div>'
           : '<p class="small">这一章是线性结构，没有地图坐标，直接看下面的小节列表。</p>')
@@ -2802,7 +2805,7 @@ function renderSectionDetail() {
         + '<div class="kv"><span>前置小节</span><strong>' + esc((d.requires || []).join(' / ') || '—') + '</strong></div>'
         + '<div class="kv"><span>解锁后开启</span><strong>' + esc((d.unlocks || []).join(' / ') || '—') + '</strong></div>'
         + '</div><div class="row">'
-        + '<button class="mini" data-section-unlock>解锁（之前全部通关）</button>'
+        + '<button class="mini" data-section-unlock title="沿依赖链把必需的前置小节补成通关，不动无关分支">解锁（补前置）</button>'
         + (d.lockable ? '<button class="mini" data-section-lock>锁定（之后全部）</button>'
           : '<span class="small">第一部第一章第一话不可锁定</span>')
         + '<button class="mini" data-section-clear>整话通关</button>'
@@ -2882,12 +2885,16 @@ function renderSectionDetail() {
     return api('/api/view/chapters').then(function (data) {
       var html = '<div class="toolbar"><button data-clear>全部章节标记已通</button>'
         + '<button data-reset>全部章节标记未通</button><span class="spacer"></span>'
-        + '<span class="small">共 ' + data.total + ' 章 · 带「剧情树」的是分支章</span></div>';
+        + '<span class="small">共 ' + data.total + ' 章</span></div>'
+        + '<p class="small policyNote">策略：<b>整章通关</b> 把该章全部小节设为已通关；'
+        + '<b>整章解锁</b> 与解锁时的自动补齐只补<b>最小集</b>（开出下一章所需的小节，树上标「必需」）。</p>';
       html += '<table><thead><tr><th>章节</th><th>标题</th><th>类型</th><th>小节进度</th><th>状态</th><th>操作</th></tr></thead><tbody>';
       data.rows.forEach(function (row) {
         html += '<tr><td>' + esc(row.no || row.chapterId) + '</td><td>' + esc(row.title || '') + '</td>'
           + '<td class="small">' + esc(row.chapterType || row.questType || '') + '</td>'
-          + '<td class="num">' + esc(row.clearedSections) + ' / ' + esc(row.sectionCount) + '</td><td>'
+          + '<td class="num">' + esc(row.clearedSections) + ' / ' + esc(row.sectionCount)
+          + (row.requiredCount ? '<span class="small">（必需 ' + esc(row.requiredCleared) + '/'
+            + esc(row.requiredCount) + '）</span>' : '') + '</td><td>'
           + '<button class="mini toggle" data-chapter="' + esc(row.chapterId) + '" data-on="'
           + (row.cleared ? '1' : '0') + '">' + (row.cleared ? '已通' : '未通') + '</button></td><td>'
           + '<button class="mini" data-chapter-run="' + esc(row.chapterId) + '">整章通关</button> '

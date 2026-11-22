@@ -2079,8 +2079,11 @@ class Editor:
         for key, meta in meta_chapters.items():
             local = self.catalog.chapter(meta.get("chapterId"))
             sections = meta.get("sections") or []
+            required = meta.get("requiredSections") or []
             cleared = sum(1 for sid in sections
                           if (section_rows.get(str(sid)) or {}).get("cleared") is True)
+            required_cleared = sum(1 for sid in required
+                                   if (section_rows.get(str(sid)) or {}).get("cleared") is True)
             state = state_rows.get(str(meta.get("chapterId"))) or {}
             rows.append({
                 "chapterId": meta.get("chapterId"),
@@ -2090,6 +2093,8 @@ class Editor:
                 "partNo": meta.get("partNo"),
                 "chapterType": meta.get("chapterType"),
                 "sectionCount": len(sections),
+                "requiredCount": len(required),
+                "requiredCleared": required_cleared,
                 "layoutCount": len(meta.get("layout") or []),
                 "present": bool(state),
                 "cleared": state.get("cleared") is True,
@@ -2318,6 +2323,7 @@ class Editor:
         quest_rows = {str(row.get("questBattleId")): row for row in self.rows("userQuestBattleList")}
         by_section = data.get("bySection") or {}
         prereq = data.get("prerequisites") or {}
+        required_ids = set(int(x) for x in chapter.get("requiredSections") or [])
         nodes = []
         placed_ids = set()
         for item in layout:
@@ -2347,6 +2353,7 @@ class Editor:
                 "questCleared": sum(1 for quest in quests if quest["cleared"]),
                 "requires": [int(x) for x in (prereq.get(sid) or [])],
                 "unplaced": False,
+                "required": int(item.get("sectionId")) in required_ids,
             })
         # 没有地图坐标的小节也要列出来（游戏里它们不在地图上）
         for sid_value in chapter.get("sections") or []:
@@ -2377,6 +2384,7 @@ class Editor:
                 "questCleared": sum(1 for quest in quests if quest["cleared"]),
                 "requires": [int(x) for x in (prereq.get(sid) or [])],
                 "unplaced": True,
+                "required": int(sid_value) in required_ids,
             })
         if nodes:
             xs = [node["x"] for node in nodes if isinstance(node.get("x"), int)]
@@ -2560,7 +2568,8 @@ class Editor:
                 seen_chapters.add(dep)
                 chapter_queue.append(dep)
                 dep_meta = chapters_meta.get(str(dep)) or {}
-                for sid in dep_meta.get("sections") or []:
+                gate = dep_meta.get("requiredSections") or dep_meta.get("sections") or []
+                for sid in gate:
                     needed.add(int(sid))
                     for dep2 in prereq.get(str(sid)) or []:
                         needed.add(int(dep2))

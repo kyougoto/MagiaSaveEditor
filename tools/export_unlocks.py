@@ -41,6 +41,7 @@ def main(argv=None):
     by_section = {}
     prerequisites = {}
     chapter_sections = {}
+    required_sections = {}
     for key, row in rules.items():
         section_id = as_int(row.get("sectionId") or key)
         if not section_id:
@@ -58,7 +59,7 @@ def main(argv=None):
             entry["chapterId"] = as_int(completed.get("chapterId"))
             entry["chapterSections"] = [as_int(x) for x in completed.get("requiredSectionIds") or []]
             if entry["chapterId"]:
-                bucket = chapter_sections.setdefault(str(entry["chapterId"]), set())
+                bucket = required_sections.setdefault(str(entry["chapterId"]), set())
                 for sid in entry["chapterSections"]:
                     bucket.add(sid)
         by_section[str(section_id)] = entry
@@ -102,7 +103,8 @@ def main(argv=None):
         chapter_id = as_int(row.get("chapterId") or key)
         if not chapter_id:
             continue
-        chapter_section_ids = sorted(chapter_sections.get(str(chapter_id), set()))
+        required_ids = sorted(required_sections.get(str(chapter_id), set()))
+        chapter_section_ids = sorted(chapter_sections.get(str(chapter_id), set()) | set(required_ids))
         layout = []
         for sid in chapter_section_ids:
             meta = section_meta.get(str(sid))
@@ -123,6 +125,7 @@ def main(argv=None):
             "title": row.get("title"),
             "sectionCount": as_int(row.get("sectionCount")),
             "sections": chapter_section_ids,
+            "requiredSections": required_ids,
         }
 
     # 章级前置：通关某一节会解锁哪些章 → 那些章的前置就是这一节所在的章
