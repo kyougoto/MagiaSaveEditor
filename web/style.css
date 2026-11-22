@@ -511,3 +511,21 @@ img.faceAvatar {
   background: #100e17; border: 1px solid var(--line);
 }
 .previewHead .name { font-size: 14px; font-weight: 600; }
+/* ---- 支援位九宫格选择 ---- */
+.slotPicker {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px; max-width: 460px; margin: 4px auto 8px;
+}
+.slotCell {
+  position: relative; min-height: 84px; border-radius: 10px; padding: 18px 6px 8px;
+  border: 1px solid var(--line); background: var(--bg-2);
+  display: grid; gap: 6px; place-items: center; text-align: center;
+}
+.slotCell .pos { position: absolute; top: 4px; left: 7px; font-size: 10px; color: var(--muted); }
+.slotCell .who { font-size: 12px; }
+.slotCell.free { border-color: rgba(99, 214, 160, .5); }
+.slotCell.helper { border-color: #63d6a0; border-style: dashed; }
+.slotCell.helper .who { color: #9fe6c4; }
+.slotCell.occupied { border-color: rgba(180, 108, 255, .55); }
+.slotCell.disabled { opacity: .35; }
+.slotCell button { margin-top: 2px; }

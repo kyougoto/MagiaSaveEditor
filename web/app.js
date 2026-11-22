@@ -1728,8 +1728,7 @@ function renderCharaDetail() {
         + '<div class="id">格 ' + esc(item.position) + ' · 好友填充</div></div></div>'
         + '<div class="deckPieces"><span class="small">这一格不占自己的角色与结晶</span></div>'
         + '<div class="row">'
-        + (deck.editable ? '<button class="mini" data-deck-helper>更换支援位</button>'
-          + (detailed ? '<button class="mini" data-deck-swap="helper">换位…</button>' : '')
+        + (deck.editable ? '<button class="mini" data-deck-helper>调整支援位</button>'
           : '<span class="small">只读编成</span>')
         + '</div>';
       return html + '</div>';
@@ -1888,6 +1887,7 @@ function renderCharaDetail() {
       }
       var html = '<div class="crumbs"><button class="mini" data-deck-back>队伍一览</button>'
         + '<span>›</span><span class="small">' + esc(deck.name) + '</span></div>';
+      html += '<div data-deck="' + esc(deck.deckType) + '">';
       html += '<section class="panel"><h2>' + esc(deck.name) + ' <span class="tag">'
         + esc(DECK_KIND_LABEL[deck.kind] || deck.kind) + '</span>'
         + '<span class="spacer"></span><span class="small">成员 ' + esc(deck.memberCount)
@@ -1909,7 +1909,7 @@ function renderCharaDetail() {
           }
           html += '</div>';
         });
-        html += '</div></section>';
+        html += '</div></section></div>';
         $('main').innerHTML = html;
         var backBtn = $('main').querySelector('[data-deck-back]');
         if (backBtn) {
@@ -1935,7 +1935,7 @@ function renderCharaDetail() {
       if (!deck.editable) {
         html += '<p class="small">这个编成不是任务编队，页面只做查看。</p>';
       }
-      html += '</section>';
+      html += '</section></div>';
       $('main').innerHTML = html;
 
       var back = $('main').querySelector('[data-deck-back]');
@@ -2134,39 +2134,67 @@ function renderCharaDetail() {
     }).catch(fail);
   }
 
+  function helperGridHtml(deck) {
+    var slotSet = {};
+    (deck.formationSlots || []).forEach(function (slot) { slotSet[slot] = true; });
+    var taken = {};
+    (deck.members || []).forEach(function (member) {
+      if (member.userCardId && member.position) { taken[member.position] = member; }
+    });
+    var html = '<div class="slotPicker">';
+    POSITION_VISUAL_ORDER.forEach(function (slot) {
+      var inPool = slotSet[slot];
+      var isHelper = slot === deck.helperPosition;
+      var member = taken[slot];
+      var cls = 'slotCell';
+      if (!inPool) { cls += ' disabled'; }
+      else if (isHelper) { cls += ' helper'; }
+      else if (member) { cls += ' occupied'; }
+      else { cls += ' free'; }
+      html += '<div class="' + cls + '"><span class="pos">' + slot + '</span>';
+      if (isHelper) { html += '<span class="who">支援位</span>'; }
+      else if (member) { html += '<span class="who">' + esc(member.name || '') + '</span>'; }
+      else if (inPool) { html += '<span class="who">空位</span>'; }
+      if (inPool && !isHelper) {
+        if (member) {
+          html += '<button class="mini" data-helper-swap="' + slot + '">交换</button>';
+        } else {
+          html += '<button class="mini" data-helper-pick="' + slot + '">放这里</button>';
+        }
+      }
+      html += '</div>';
+    });
+    return html + '</div>';
+  }
+
   function openHelperPicker(deckType) {
     api('/api/view/decks').then(function (data) {
-      var deck = (data.decks || []).filter(function (item) { return String(item.deckType) === String(deckType); })[0];
+      var deck = (data.decks || []).filter(function (item) {
+        return String(item.deckType) === String(deckType);
+      })[0];
       if (!deck) { fail(new Error('找不到该编成')); return; }
-      var used = {};
-      deck.members.forEach(function (member) {
-        if (member.userCardId) { used[member.slot] = true; }
-      });
       openPicker({
-        title: '更换支援位',
+        title: '调整支援位（点九宫格）',
         placeholder: '阵型格子',
         load: function () {
-          var rows = (deck.formationSlots || []).map(function (slot) {
-            return { slot: slot, taken: slot === deck.helperPosition };
-          });
-          return Promise.resolve({ rows: rows, total: rows.length });
+          return Promise.resolve({ rows: [{ html: helperGridHtml(deck) }], total: 1 });
         },
-        meta: function () { return '阵型：' + (deck.formationName || deck.formationSheetId); },
-        render: function (rows) {
-          var html = '<div class="grid">';
-          rows.forEach(function (row) {
-            html += '<div class="tile"><div class="name">格 ' + esc(row.slot) + '</div>'
-              + '<div class="id">' + (row.taken ? '当前支援位' : '空位') + '</div>'
-              + '<div class="row"><button class="mini" data-helper-pick="' + esc(row.slot) + '">'
-              + (row.taken ? '已是支援位' : '放这里') + '</button></div></div>';
-          });
-          return html + '</div>';
+        meta: function () {
+          return '阵型：' + (deck.formationName || deck.formationSheetId)
+            + ' · 当前支援位：' + (deck.helperPosition || '—');
         },
+        render: function (rows) { return (rows[0] && rows[0].html) || ''; },
         bind: function (host) {
           host.querySelectorAll('[data-helper-pick]').forEach(function (button) {
             button.addEventListener('click', function () {
               edit([{ op: 'deck.helper', deckType: deckType,
                 position: Number(button.getAttribute('data-helper-pick')) }]);
+            });
+          });
+          host.querySelectorAll('[data-helper-swap]').forEach(function (button) {
+            button.addEventListener('click', function () {
+              edit([{ op: 'deck.swap', deckType: deckType, a: 'helper',
+                b: Number(button.getAttribute('data-helper-swap')) }]);
             });
           });
         }
