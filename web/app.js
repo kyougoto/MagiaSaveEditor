@@ -414,9 +414,11 @@
       statusRows.forEach(function (row) {
         if (row.maxOf) { maxOf[row.maxOf] = row.statusId; }
       });
+      // 只有「被主项当作上限引用」的 MAX_* 才隐藏（值显示在主行的上限里）；MAX_FOLLOW 这类独立项要保留
+      var usedAsMax = {};
+      statusRows.forEach(function (row) { if (row.maxOf) { usedAsMax[row.maxOf] = true; } });
       statusRows.forEach(function (row) {
-        // MAX_* 只是主项的上限，显示在主行的「上限」里，不再单独成行
-        if (String(row.statusId).indexOf('MAX_') === 0) { return; }
+        if (usedAsMax[row.statusId]) { return; }
         var spec = { op: 'status.set', statusId: row.statusId, valueKey: 'point' };
         var maxRow = row.maxOf
           ? statusRows.filter(function (item) { return item.statusId === row.maxOf; })[0]
