@@ -2091,6 +2091,7 @@ class Editor:
                 "title": local.get("title") or meta.get("title"),
                 "questType": local.get("questType") or meta.get("questType"),
                 "partNo": meta.get("partNo"),
+                "partLabel": {1: "第一部", 2: "第二部"}.get(                    meta.get("partNo"), "其他（外传 / 活动）"),
                 "chapterType": meta.get("chapterType"),
                 "sectionCount": len(sections),
                 "requiredCount": len(required),

@@ -2890,21 +2890,35 @@ function renderSectionDetail() {
         + '<span class="small">共 ' + data.total + ' 章</span></div>'
         + '<p class="small policyNote">策略：<b>整章通关</b> 把该章全部小节设为已通关；'
         + '<b>整章解锁</b> 与解锁时的自动补齐只补<b>最小集</b>（开出下一章所需的小节，树上标「必需」）。</p>';
-      html += '<table><thead><tr><th>章节</th><th>标题</th><th>类型</th><th>小节进度</th><th>状态</th><th>操作</th></tr></thead><tbody>';
+      var groups = [];
+      var groupIndex = {};
       data.rows.forEach(function (row) {
-        html += '<tr><td>' + esc(row.no || row.chapterId) + '</td><td>' + esc(row.title || '') + '</td>'
-          + '<td class="small">' + esc(row.chapterType || row.questType || '') + '</td>'
-          + '<td class="num">' + esc(row.clearedSections) + ' / ' + esc(row.sectionCount)
-          + (row.requiredCount ? '<span class="small">（必需 ' + esc(row.requiredCleared) + '/'
-            + esc(row.requiredCount) + '）</span>' : '') + '</td><td>'
-          + '<button class="mini toggle" data-chapter="' + esc(row.chapterId) + '" data-on="'
-          + (row.cleared ? '1' : '0') + '">' + (row.cleared ? '已通' : '未通') + '</button></td><td>'
-          + '<button class="mini" data-chapter-run="' + esc(row.chapterId) + '">整章通关</button> '
-          + '<button class="mini" data-chapter-unlock="' + esc(row.chapterId) + '">整章解锁</button>'
-          + ' <button class="mini" data-chapter-tree="' + esc(row.chapterId) + '">详情</button>'
-          + '</td></tr>';
+        var label = row.partLabel || '其他';
+        if (!groupIndex[label]) {
+          groupIndex[label] = { label: label, rows: [] };
+          groups.push(groupIndex[label]);
+        }
+        groupIndex[label].rows.push(row);
       });
-      html += '</tbody></table>';
+      groups.forEach(function (group) {
+        html += '<section class="panel"><h2>' + esc(group.label)
+          + ' <span class="small">' + group.rows.length + ' 章</span></h2>'
+          + '<table><thead><tr><th>章节</th><th>标题</th><th>类型</th><th>小节进度</th><th>状态</th><th>操作</th></tr></thead><tbody>';
+        group.rows.forEach(function (row) {
+          html += '<tr><td>' + esc(row.no || row.chapterId) + '</td><td>' + esc(row.title || '') + '</td>'
+            + '<td class="small">' + esc(row.chapterType || row.questType || '') + '</td>'
+            + '<td class="num">' + esc(row.clearedSections) + ' / ' + esc(row.sectionCount)
+            + (row.requiredCount ? '<span class="small">（必需 ' + esc(row.requiredCleared) + '/'
+              + esc(row.requiredCount) + '）</span>' : '') + '</td><td>'
+            + '<button class="mini toggle" data-chapter="' + esc(row.chapterId) + '" data-on="'
+            + (row.cleared ? '1' : '0') + '">' + (row.cleared ? '已通' : '未通') + '</button></td><td>'
+            + '<button class="mini" data-chapter-run="' + esc(row.chapterId) + '">整章通关</button> '
+            + '<button class="mini" data-chapter-unlock="' + esc(row.chapterId) + '">整章解锁</button>'
+            + ' <button class="mini" data-chapter-tree="' + esc(row.chapterId) + '">详情</button>'
+            + '</td></tr>';
+        });
+        html += '</tbody></table></section>';
+      });
       $('main').innerHTML = html;
       $('main').querySelectorAll('[data-chapter]').forEach(function (button) {
         button.addEventListener('click', function () {
