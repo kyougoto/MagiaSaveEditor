@@ -94,6 +94,10 @@ def main(argv=None):
         sid = as_int(row.get("sectionId") or key)
         if not sid:
             continue
+        # 只有主线（MAIN）且编号以 10 开头的才按 sectionId 归属章节；
+        # 511710 / 521710 这离类会被 (sid // 100) % 100 误判成第 7 章，这里直接排除。
+        if not str(sid).startswith("10") or row.get("questType") != "MAIN":
+            continue
         chapter_id = (sid // 100) % 100
         chapter_sections.setdefault(str(chapter_id), set()).add(sid)
 
