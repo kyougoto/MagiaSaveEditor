@@ -14,9 +14,7 @@
     { id: 'charas', label: '魔法少女' },
     { id: 'pieces', label: '记忆结晶' },
     { id: 'decks', label: '队伍' },
-    { id: 'quests', label: '任务' },
-    { id: 'sections', label: '关卡小节' },
-    { id: 'chapters', label: '章节' },
+    { id: 'chapters', label: '剧情关卡' },
     { id: 'challenges', label: '挑战' },
     { id: 'gacha', label: '扭蛋' },
     { id: 'gifts', label: '养成素材（gift）' },
@@ -220,7 +218,6 @@
       case 'pieces': task = renderPieces(); break;
       case 'decks': task = renderDecks(); break;
       case 'quests': task = renderQuests(); break;
-      case 'sections': task = renderSections(); break;
       case 'chapters': task = renderChapters(); break;
       case 'challenges': task = renderChallenges(); break;
       case 'gacha': task = renderGacha(); break;
@@ -2697,16 +2694,24 @@ function renderCharaDetail() {
     var nodes = map.nodes || [];
     if (!nodes.length) { return '<p class="small">这一章没有坐标数据，无法画树。</p>'; }
     var b = map.bounds || { minX: 0, maxX: 1, minY: 0, maxY: 1 };
-    var cellW = 120, cellH = 92, pad = 44;
-    var cols = Math.max(1, (b.maxX - b.minX) + 1);
-    var rows = Math.max(1, (b.maxY - b.minY) + 1);
+    var cellW = 128, cellH = 96, pad = 48;
+    var xs = [], ys = [];
+    nodes.forEach(function (node) {
+      if (xs.indexOf(node.x) < 0) { xs.push(node.x); }
+      if (ys.indexOf(node.y) < 0) { ys.push(node.y); }
+    });
+    xs.sort(function (a, b2) { return a - b2; });
+    ys.sort(function (a, b2) { return a - b2; });
+    var cols = Math.max(1, xs.length);
+    var rows = Math.max(1, ys.length);
     var w = cols * cellW + pad * 2;
     var h = rows * cellH + pad * 2;
     var byId = {};
     nodes.forEach(function (node) { byId[String(node.sectionId)] = node; });
-    function cx(node) { return pad + (node.x - b.minX) * cellW + cellW / 2; }
-    function cy(node) { return pad + (node.y - b.minY) * cellH + cellH / 2; }
-    var svg = '<svg class="chapterTree" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="xMidYMid meet"><g>';
+    function cx(node) { return pad + xs.indexOf(node.x) * cellW + cellW / 2; }
+    function cy(node) { return pad + ys.indexOf(node.y) * cellH + cellH / 2; }
+    var svg = '<svg class="chapterTree" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h
+      + '" preserveAspectRatio="xMinYMin meet"><g>';
     nodes.forEach(function (node) {
       (node.connect || []).forEach(function (targetId) {
         var target = byId[String(targetId)];
@@ -2738,7 +2743,10 @@ function renderCharaDetail() {
         + '点节点切换这一节通关 / 回退（连带它包含的任务）。</p>'
         + '<div class="row"><button class="mini" data-chapter-clear>整章通关</button>'
         + '<button class="mini" data-chapter-unlock>整章解锁</button></div>'
-        + chapterTreeHtml(map) + '</section>';
+        + (map.hasLayout
+          ? '<div class="treeWrap">' + chapterTreeHtml(map) + '</div>'
+          : '<p class="small">这一章是线性结构，没有地图坐标，直接看下面的小节列表。</p>')
+        + '</section>';
       html += '<section class="panel"><h2>小节列表</h2><table><thead><tr><th>小节</th><th>标题</th>'
         + '<th>任务</th><th>状态</th><th>前置</th></tr></thead><tbody>';
       (map.nodes || []).forEach(function (node) {

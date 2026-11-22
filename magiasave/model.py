@@ -2307,6 +2307,8 @@ class Editor:
             "chapterType": chapter.get("chapterType"),
             "partNo": chapter.get("partNo"),
             "nodeCount": len(nodes),
+            "hasLayout": any(isinstance(node.get("x"), int) and isinstance(node.get("y"), int)
+                             for node in nodes),
             "nodes": nodes,
             "bounds": bounds,
             "order": self._chapter_topology(data, [item.get("sectionId") for item in layout]),
