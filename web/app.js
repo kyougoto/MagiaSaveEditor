@@ -580,7 +580,7 @@
     var root = $('main').querySelector('[data-crumb="root"]');
     if (root) {
       root.addEventListener('click', function () {
-        S.itemsNav = { family: null, group: null };
+        S.itemsNav = { family: null, group: null, scope: nav.scope || 'player' };
         S.page.items = { offset: 0, q: '', sort: 'id' };
         render();
       });
@@ -629,7 +629,7 @@
           if (event.key !== 'Enter') { return; }
           var term = globalSearch.value.trim();
           if (!term) { return; }
-          S.itemsNav = { family: null, group: null, scope: 'all', search: term };
+          S.itemsNav = { family: null, group: null, scope: scope, search: term };
           S.page.items = { offset: 0, q: term, sort: 'qty' };
           render();
         });
@@ -738,7 +738,8 @@
       var clearSearch = $('main').querySelector('[data-search-clear]');
       if (clearSearch) {
         clearSearch.addEventListener('click', function () {
-          S.itemsNav = { family: null, group: null, scope: 'player' };
+          S.itemsNav = { family: null, group: null,
+            scope: (S.itemsNav && S.itemsNav.scope) || 'player' };
           S.page.items = { offset: 0, q: '', sort: 'id' };
           render();
         });
