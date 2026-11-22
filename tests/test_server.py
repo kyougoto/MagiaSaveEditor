@@ -80,7 +80,6 @@ def main():
             "/api/view/sections-tree": ["parts"],
             "/api/view/chapters": ["rows"],
             "/api/view/challenges": ["groups"],
-            "/api/view/gacha": ["kinds", "groups"],
             "/api/view/gifts": ["groups"],
             "/api/view/gifts-catalog": ["rows"],
             "/api/view/status": ["rows"],

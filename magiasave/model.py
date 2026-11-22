@@ -2706,24 +2706,6 @@ class Editor:
             out.append({"table": table, "label": label, "total": len(rows), "rows": rows})
         return {"groups": out, "hiddenUnknown": hidden, "withoutTarget": without_target}
 
-    def gacha_view(self):
-        kinds = [{"gachaKindId": row.get("gachaKindId"), "label": "扭蛋种类",
-                  "totalCount": row.get("totalCount"),
-                  "dailyCount": row.get("dailyCount"), "weeklyCount": row.get("weeklyCount"),
-                  "monthlyCount": row.get("monthlyCount"), "recentGachaAt": row.get("recentGachaAt")}
-                 for row in self.rows("userGachaKindList")]
-        groups = [{"gachaGroupId": row.get("gachaGroupId"), "label": "扭蛋组",
-                   "count": row.get("count"),
-                   "paid": row.get("paid"), "totalCount": row.get("totalCount"),
-                   "dailyCount": row.get("dailyCount"), "cardId": row.get("cardId"),
-                   "recentGachaAt": row.get("recentGachaAt")}
-                  for row in self.rows("userGachaGroupList")]
-        kinds.sort(key=lambda row: (row.get("gachaKindId") or 0))
-        groups.sort(key=lambda row: (row.get("gachaGroupId") or 0))
-        receipts = (self.profile.get("ordinaryGacha") or {}).get("receipts")
-        return {"kinds": kinds, "groups": groups,
-                "receiptCount": len(receipts) if isinstance(receipts, list) else 0}
-
     def gifts_view(self):
         """gift 是养成素材：全部已实装素材都列出（未拥有显示 0），按官方 ID 段分组。"""
         owned = {}

@@ -269,8 +269,6 @@ class Handler(BaseHTTPRequestHandler):
                 return {"ok": True, **editor.section_detail(query.get("sectionId"))}
             if name == "challenges":
                 return {"ok": True, **editor.challenges_view()}
-            if name == "gacha":
-                return {"ok": True, **editor.gacha_view()}
             if name == "gifts":
                 return {"ok": True, **editor.gifts_view()}
             if name == "quests-tree":
