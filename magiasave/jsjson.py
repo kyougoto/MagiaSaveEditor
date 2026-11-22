@@ -9,16 +9,11 @@
 """
 
 import math
+import re
+from json.encoder import encode_basestring
 
-_ESCAPES = {
-    '"': '\\"',
-    "\\": "\\\\",
-    "\b": "\\b",
-    "\f": "\\f",
-    "\n": "\\n",
-    "\r": "\\r",
-    "\t": "\\t",
-}
+
+_SURROGATES = re.compile(r"[\ud800-\udfff]")
 
 
 def utf8_len(text):
@@ -48,20 +43,12 @@ def number_text(value):
 
 def quote(text):
     """JS JSON.stringify 的字符串转义：控制字符转义，非 ASCII 原样，孤立代理转义。"""
-    out = ['"']
-    for ch in text:
-        code = ord(ch)
-        if ch in _ESCAPES:
-            out.append(_ESCAPES[ch])
-        elif code < 0x20:
-            out.append("\\u%04x" % code)
-        elif 0xD800 <= code <= 0xDFFF:
-            # Python 字符串里的孤立代理：JS 侧 storageJson 把它写成 \\uXXXX。
-            out.append("\\u%04x" % code)
-        else:
-            out.append(ch)
-    out.append('"')
-    return "".join(out)
+    quoted = encode_basestring(text)
+    # ensure_ascii=False 的标准转义会原样保留代理码元。仅修正这类码元，
+    # 不能用 ensure_ascii=True，否则中文和非 BMP 字符也会改变。
+    if quoted.isascii() or not _SURROGATES.search(quoted):
+        return quoted
+    return _SURROGATES.sub(lambda m: "\\u%04x" % ord(m[0]), quoted)
 
 
 def dumps(value):

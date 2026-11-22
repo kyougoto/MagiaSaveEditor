@@ -7,6 +7,7 @@
   CNOfflineSlotLibrary.allowedNamespace()
 """
 
+import codecs
 import datetime
 import json
 import math
@@ -17,10 +18,8 @@ from .errors import FormatError, ValidationError
 
 # ---------------------------------------------------------------- UTF-16 计数
 
-if sys.byteorder == "little":
-    _LE = "utf-16-le"
-else:  # pragma: no cover - 只为可移植性
-    _LE = "utf-16-le"
+# memoryview.cast("H") 使用本机字节序，显式选择相同字节序的无 BOM 编码。
+_NATIVE_UTF16 = "utf-16-le" if sys.byteorder == "little" else "utf-16-be"
 
 
 def jslen(text):
@@ -62,7 +61,7 @@ def split_parts(serialized, revision, limit=protocol.MAX_PARTS, max_bytes=protoc
     """
     if not isinstance(serialized, str):
         raise TypeError("serialized must be str")
-    units = utf16_units(serialized)
+    units = memoryview(serialized.encode(_NATIVE_UTF16, "surrogatepass")).cast("H")
     total = len(units)
     parts = []
     offset = 0
@@ -77,7 +76,7 @@ def split_parts(serialized, revision, limit=protocol.MAX_PARTS, max_bytes=protoc
             if 0xD800 <= last <= 0xDBFF and 0xDC00 <= nxt <= 0xDFFF:
                 size -= 1
                 continue
-            candidate = units_to_text(units, offset, offset + size)
+            candidate = codecs.decode(units[offset:offset + size], _NATIVE_UTF16, "surrogatepass")
             encoded = part_envelope_bytes(revision, len(parts), candidate)
             if encoded <= max_bytes:
                 data = candidate
