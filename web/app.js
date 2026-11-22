@@ -1243,7 +1243,7 @@ if (panel === 'magia') {
     var card = awake.card || {};
     var limit = awake.limitBreak || {};
     var evolve = awake.evolve || {};
-    var html = '<section class="panel"><h2>界限突破（revision）'
+    var html = '<section class="panel"><h2>魔力解放（revision，消耗命运宝石，每次 +1 结晶槽位）'
       + '<span class="spacer"></span><span class="small">当前 ' + esc(card.revision) + ' / 3 · 命运宝石 '
       + esc(card.lbItemNum) + '（每次需要 ' + esc(limit.gems) + '）</span></h2>';
     html += '<table><thead><tr><th>阶段</th><th>消耗</th><th>战力</th><th>状态</th></tr></thead><tbody>';
@@ -1500,6 +1500,12 @@ function renderCharaDetail() {
 
   var PIECE_TYPE_LABEL = { ABILITY: '能力', SKILL: '技能' };
 
+  function pieceRankLabel(rank) {
+    var text = String(rank || '');
+    var match = text.match(/RANK_(\d)/);
+    return match ? ('\u2605' + match[1]) : text;
+  }
+
   function pieceTypeLabel(type) {
     return PIECE_TYPE_LABEL[type] || type || '';
   }
@@ -1527,7 +1533,7 @@ function renderCharaDetail() {
       + '&q=' + encodeURIComponent(page.q || '')
       + '&rank=' + encodeURIComponent(filter.rank || '')
       + '&type=' + encodeURIComponent(filter.type || '')
-      + '&limit=' + encodeURIComponent(filter.limit || '')
+      + '&limitMode=' + encodeURIComponent(filter.limit || '')
       + '&charaId=' + encodeURIComponent(filter.charaId || '');
     var charaPromise = api('/api/view/charas?limit=200').catch(function () { return { rows: [] }; });
     return Promise.all([api(url), charaPromise]).then(function (results) {
@@ -1796,13 +1802,18 @@ function renderCharaDetail() {
     if (!(item.pieces || []).length) {
       html += '<span class="small">无结晶</span>';
     }
-    html += '</div><div class="row">';
+    var capacity = item.pieceCapacity || 1;
+    html += '<span class="small capacityHint">结晶 ' + (item.pieces || []).length + ' / '
+      + capacity + '</span></div><div class="row">';
     if (deck.editable) {
       html += '<button class="mini" data-deck-member="' + esc(item.slot) + '">'
         + (item.userCardId ? '更换角色' : '放入角色') + '</button>';
       if (item.userCardId) {
-        html += '<button class="mini" data-deck-member-remove="' + esc(item.slot) + '">移除</button>'
-          + '<button class="mini" data-deck-piece-add="' + esc(item.slot) + '">加结晶</button>'
+        html += '<button class="mini" data-deck-member-remove="' + esc(item.slot) + '">移除</button>';
+        if ((item.pieces || []).length < capacity) {
+          html += '<button class="mini" data-deck-piece-add="' + esc(item.slot) + '">加结晶</button>';
+        }
+        html += ''
           + (detailed ? '<button class="mini" data-deck-swap="' + esc(item.slot) + '">换位…</button>' : '');
       }
     } else {
@@ -2323,22 +2334,46 @@ function renderCharaDetail() {
   }
 
   function openDeckPiecePicker(deckType, member, slot) {
+    var filter = { rank: '', type: '' };
     openPicker({
       title: '给第 ' + member + ' 位（槽 ' + slot + '）选择记忆结晶',
       placeholder: '搜索结晶名称',
-      load: function (q) { return api('/api/view/pieces?limit=200&q=' + encodeURIComponent(q)); },
+      load: function (q) {
+        return api('/api/view/pieces?limit=200&q=' + encodeURIComponent(q)
+          + '&rank=' + encodeURIComponent(filter.rank)
+          + '&type=' + encodeURIComponent(filter.type));
+      },
       meta: function (data) { return '已拥有 ' + data.total + ' 枚'; },
-      render: function (rows) {
-        var html = '<div class="grid wide">';
+      render: function (rows, data) {
+        var html = '<div class="toolbar">'
+          + '<select data-dp-rank>' + selectOptions(data.ranks || [], filter.rank) + '</select>'
+          + '<select data-dp-type>' + selectOptions(data.types || [], filter.type, pieceTypeLabel) + '</select>'
+          + '<span class="small">' + rows.length + ' 枚</span></div>'
+          + '<div class="grid wide">';
         rows.forEach(function (row) {
           html += '<div class="tile">' + thumb(row.icon, row.name, 'icon')
             + '<div class="name">' + esc(row.name) + '</div>'
-            + '<div class="id">#' + esc(row.pieceId) + ' · ' + esc(row.rank || '') + ' · Lv ' + esc(row.level) + '</div>'
+            + '<div class="id">#' + esc(row.pieceId) + ' · ' + esc(pieceRankLabel(row.rank)) + ' · '
+            + esc(pieceTypeLabel(row.type)) + ' · Lv ' + esc(row.level) + '</div>'
             + '<div class="row"><button class="mini" data-deck-piece="' + esc(row.id) + '">装上</button></div></div>';
         });
         return html + '</div>';
       },
       bind: function (host, rows) {
+        var rankSelect = host.querySelector('[data-dp-rank]');
+        if (rankSelect) {
+          rankSelect.addEventListener('change', function () {
+            filter.rank = rankSelect.value;
+            if (host._reload) { host._reload(); }
+          });
+        }
+        var typeSelect = host.querySelector('[data-dp-type]');
+        if (typeSelect) {
+          typeSelect.addEventListener('change', function () {
+            filter.type = typeSelect.value;
+            if (host._reload) { host._reload(); }
+          });
+        }
         host.querySelectorAll('[data-deck-piece]').forEach(function (button) {
           button.addEventListener('click', function () {
             edit([{ op: 'deck.piece', deckType: deckType, member: member, slot: slot,

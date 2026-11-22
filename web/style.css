@@ -661,3 +661,5 @@ button.mini.star.on {
 button.mini.star:hover { opacity: 1; border-color: #ffd479; }
 /* ---- 挑战条件里的换行 ---- */
 #main table td b { white-space: pre-wrap; }
+/* ---- 结晶槽位提示 ---- */
+.deckPieces .capacityHint { margin-left: auto; opacity: .8; }

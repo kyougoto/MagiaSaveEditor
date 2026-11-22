@@ -1178,7 +1178,7 @@ class Editor:
         self._add_forces(profile, forces)
 
     def awakening_view(self, user_card_id=None, chara_id=None):
-        """觉醒（升星）与界限突破（revision）：需求与持有全展示，操作本身不改持有材料。"""
+        """觉醒（升星）与魔力解放（revision，消耗命运宝石 lbItemNum，每次 +1 结晶槽位）。"""
         awaken = self.awakening_catalog()
         limit = awaken.get("limitBreak") or {}
         rules = awaken.get("awakening") or {}
@@ -1848,6 +1848,7 @@ class Editor:
                     "defense": int(chara_row.get("addendDefense") or 0),
                 }
                 bonus = self.attribute_bonus(attribute)
+                capacity = max(1, min(4, 1 + int(card.get("revision") or 0)))
                 base = {"hp": int(card.get("hp") or 0),
                         "attack": int(card.get("attack") or 0),
                         "defense": int(card.get("defense") or 0)}
@@ -1876,6 +1877,7 @@ class Editor:
                     "spiritBonus": spirit,
                     "attributeBonus": bonus,
                     "total": total,
+                    "pieceCapacity": capacity,
                     "pieces": piece_rows,
                 })
 
@@ -4027,6 +4029,20 @@ class Editor:
         deck[key_a], deck[key_b] = value_b, value_a
         extra.add("state.userDeckList[deckType=%s]" % deck.get("deckType"))
 
+    def piece_capacity(self, profile, user_card_id):
+        """记忆结晶槽位：初始 1，每次魔力解放（card.revision）+1，最多 4。
+
+        魔力解放消耗命运宝石（userCharaList.lbItemNum），提升的是 card.revision；
+        lbItemNum 只是宝石持有数，不是已解放次数。
+        """
+        card = None
+        for row in profile["state"].get("userCardList") or []:
+            if str(row.get("id")) == str(user_card_id):
+                card = row
+                break
+        released = int((card or {}).get("revision") or 0)
+        return max(1, min(4, 1 + released))
+
     def _op_deck_piece(self, profile, op, _force, extra):
         deck = self._deck_target(profile, op)
         member = _int(op.get("member"), "member", 1, 4)
@@ -4041,6 +4057,10 @@ class Editor:
             raise ValidationError("找不到记忆结晶: %r" % (instance,), code="path_missing")
         if not deck.get("userCardId%d" % member):
             raise ValidationError("这个位置还没有角色", code="deck_member_missing")
+        capacity = self.piece_capacity(profile, deck.get("userCardId%d" % member))
+        if slot > capacity:
+            raise ValidationError("这个角色最多装备 %d 枚结晶（魔力解放 %d 次），槽 %d 不可用"
+                                  % (capacity, capacity - 1, slot), code="piece_slot_locked")
         for other in profile["state"].get("userDeckList") or []:
             for (other_member, other_slot), value in self.deck_piece_slots(other).items():
                 if str(value) == str(instance) and not (
