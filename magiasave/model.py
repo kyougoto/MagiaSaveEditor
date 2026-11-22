@@ -1857,6 +1857,9 @@ class Editor:
             if piece_type and str(row.get("type")) != str(piece_type):
                 continue
             master = self.masters.piece(key)
+            if not master:
+                # 缺成长数据的结晶无法添加，也无法推算数值
+                continue
             rows.append({
                 "pieceId": int(key) if key.isdigit() else key,
                 "name": name,
@@ -2573,6 +2576,9 @@ class Editor:
             if needle and needle not in str(key) and needle not in str(name).lower():
                 continue
             cards = sorted(cards_by_chara.get(key) or [], key=lambda item: item["rankLevel"])
+            if not cards:
+                # 没有任何卡片数据（无法生成合法卡）的角色直接不列出
+                continue
             rows.append({
                 "charaId": int(key) if str(key).isdigit() else key,
                 "name": name,
