@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# 打包产物（可重建：python build_exe.py）
+build/
+dist/
+*.spec
+
+# 测试与调试产物
+_work/
+_re/
+*.tmp
+
+# 系统
+Thumbs.db
+.DS_Store

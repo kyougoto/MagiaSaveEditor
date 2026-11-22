@@ -1,0 +1,60 @@
+{
+ "generated": true,
+ "dataRoot": "H:\\magia_server\\io.kamihama.totentanz\\files",
+ "groups": {
+  "gifts": {
+   "total": 105,
+   "copied": 105,
+   "missing": 0,
+   "bytes": 522238,
+   "missingSample": []
+  },
+  "gem": {
+   "total": 231,
+   "copied": 230,
+   "missing": 1,
+   "bytes": 6951422,
+   "missingSample": [
+    "H:\\magia_server\\magia_save_editor\\assets\\gem\\1208.png"
+   ]
+  },
+  "cards": {
+   "total": 530,
+   "copied": 525,
+   "missing": 5,
+   "bytes": 10584707,
+   "missingSample": [
+    "H:\\magia_server\\magia_save_editor\\assets\\cards\\12084.png",
+    "H:\\magia_server\\magia_save_editor\\assets\\cards\\65014.png",
+    "H:\\magia_server\\magia_save_editor\\assets\\cards\\71515.png",
+    "H:\\magia_server\\magia_save_editor\\assets\\cards\\83134.png",
+    "H:\\magia_server\\magia_save_editor\\assets\\cards\\10031.png"
+   ]
+  },
+  "pieces": {
+   "total": 1042,
+   "copied": 1042,
+   "missing": 0,
+   "bytes": 14116099,
+   "missingSample": []
+  },
+  "items": {
+   "total": 1329,
+   "copied": 213,
+   "missing": 1116,
+   "bytes": 1792759,
+   "missingSample": [
+    "H:\\magia_server\\magia_save_editor\\assets\\items\\anniversary_gacha10_1109_ticket.png",
+    "H:\\magia_server\\magia_save_editor\\assets\\items\\campaign_1205_exchange.png",
+    "H:\\magia_server\\magia_save_editor\\assets\\items\\campaign_1210_exchange.png",
+    "H:\\magia_server\\magia_save_editor\\assets\\items\\campaign_1225_key.png",
+    "H:\\magia_server\\magia_save_editor\\assets\\items\\campaign_1251_exchange_2.png",
+    "H:\\magia_server\\magia_save_editor\\assets\\items\\campaign_1353_exchange.png",
+    "H:\\magia_server\\magia_save_editor\\assets\\items\\event_accomplish_1019_exchange_1.png",
+    "H:\\magia_server\\magia_save_editor\\assets\\items\\event_accomplish_1027_exchange_1.png",
+    "H:\\magia_server\\magia_save_editor\\assets\\items\\event_accomplish_1042_exchange_1.png",
+    "H:\\magia_server\\magia_save_editor\\assets\\items\\event_accomplish_1085_exchange_1.png"
+   ]
+  }
+ }
+}

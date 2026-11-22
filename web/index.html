@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Magia☆Record 存档编辑器</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">MR</span>
+    <div>
+      <h1>魔法纪录 存档编辑器</h1>
+      <p id="archiveMeta" class="meta">未打开存档</p>
+    </div>
+  </div>
+  <div class="topActions">
+    <span id="dirtyBadge" class="badge off">无改动</span>
+    <button id="btnUndo" class="ghost" title="撤销上一步编辑">撤销</button>
+    <button id="btnDiscard" class="ghost" title="丢弃全部未保存改动">丢弃改动</button>
+    <button id="btnSave" class="primary">另存为…</button>
+  </div>
+</header>
+
+<section id="openPanel" class="openPanel">
+  <label>存档 zip 路径
+    <input id="openPath" type="text" spellcheck="false" placeholder="H:/magia_server/magia-save-chino-1794718180238.zip">
+  </label>
+  <button id="btnPick" class="ghost">浏览…</button>
+  <button id="btnOpen" class="primary">打开</button>
+  <span class="hint">格式：MagiaOfflineSlotArchive/v1（off3_* 分片协议）</span>
+</section>
+
+<nav id="tabs" class="tabs"></nav>
+
+<main id="main" class="main">
+  <div class="empty" id="emptyHint">请先打开一个存档 zip。</div>
+</main>
+
+<div id="modal" class="modal" aria-hidden="true">
+  <div class="panel" role="dialog" aria-modal="true">
+    <div class="head">
+      <strong id="modalTitle">选择物品</strong>
+      <input id="modalSearch" type="text" placeholder="搜索名称或 ID">
+      <span id="modalMeta" class="small"></span>
+      <button id="modalClose" class="ghost mini">关闭</button>
+    </div>
+    <div class="body" id="modalBody"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
