@@ -350,6 +350,12 @@
       });
       html += '</tbody></table></section>';
       $('main').innerHTML = html;
+      var battleClear = $('main').querySelector('[data-battle-clear]');
+      if (battleClear) {
+        battleClear.addEventListener('click', function () {
+          edit([{ op: 'battle.clear' }]);
+        });
+      }
     });
   }
 
@@ -430,13 +436,6 @@
         + '<button data-preset="arena">CP / RP 拉满</button></div></section>';
 
       $('main').innerHTML = html;
-      var battleClear = $('main').querySelector('[data-battle-clear]');
-      if (battleClear) {
-        battleClear.addEventListener('click', function () {
-          if (!window.confirm('清除这次未完成的战斗？已结算记录与奖励不受影响。')) { return; }
-          edit([{ op: 'battle.clear' }]);
-        });
-      }
       bindNumberRows($('main'), function (spec, row) {
         var input = row.querySelector('[data-field]');
         if (input && input.type === 'text') {
