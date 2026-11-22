@@ -93,25 +93,33 @@ def main():
     deck_type = deck["deckType"]
     member_slot = filled[0]["slot"]
     instance = sample["id"]
+    # 结晶槽位 = 1 + 魔力解放次数，先把这张卡拉满解放，才能用第 4 个槽
+    editor.apply([{"op": "card.set", "id": filled[0].get("userCardId"),
+                   "field": "revision", "value": 3}])
     editor.apply([{"op": "deck.piece", "deckType": deck_type, "member": member_slot,
-                   "slot": 5, "pieceInstanceId": instance}])
+                   "slot": 4, "pieceInstanceId": instance}])
     after = editor.decks_view()
     target = next(item for item in after["decks"] if item["deckType"] == deck_type)
     slots = [piece for member in target["members"] if member["slot"] == member_slot
              for piece in member["pieces"] if piece["id"] == instance]
-    check("结晶装到指定槽位", bool(slots) and slots[0]["slot"] == 5, json.dumps(slots, ensure_ascii=False)[:80])
+    check("结晶装到指定槽位", bool(slots) and slots[0]["slot"] == 4, json.dumps(slots, ensure_ascii=False)[:80])
     check("结晶页能反查编成队伍", any(item["deckType"] == deck_type
                                 for item in editor.piece_detail(instance)["decks"]),
           json.dumps(editor.piece_detail(instance)["decks"], ensure_ascii=False)[:80])
 
     other_member = 2 if member_slot != 2 else 1
+    other_row = next((m for m in target["members"]
+                      if m["slot"] == other_member and m.get("userCardId")), None)
+    if other_row:
+        editor.apply([{"op": "card.set", "id": other_row["userCardId"],
+                       "field": "revision", "value": 3}])
     expect_error("同一枚结晶不能装两处",
                  lambda: editor.apply([{"op": "deck.piece", "deckType": deck_type,
-                                        "member": other_member, "slot": 5,
+                                        "member": other_member, "slot": 4,
                                         "pieceInstanceId": instance}]),
                  "piece_already_equipped")
     editor.apply([{"op": "deck.removePiece", "deckType": deck_type,
-                   "member": member_slot, "slot": 5}])
+                   "member": member_slot, "slot": 4}])
     check("可以卸下结晶", not any(piece["id"] == instance
                               for member in editor.decks_view()["decks"][0]["members"]
                               for piece in member["pieces"]))
@@ -193,13 +201,15 @@ def main():
     out = os.path.join(WORK, "deck-out.zip")
     arc2 = archive_mod.SlotArchive.load(SAMPLE)
     editor2 = Editor(arc2)
+    editor2.apply([{"op": "card.set", "id": filled[0].get("userCardId"),
+                    "field": "revision", "value": 3}])
     editor2.apply([{"op": "deck.piece", "deckType": deck_type, "member": member_slot,
-                    "slot": 5, "pieceInstanceId": instance}])
+                    "slot": 4, "pieceInstanceId": instance}])
     info = arc2.save(out, profile=editor2.profile, label="deck")
     reloaded = archive_mod.SlotArchive.load(out)
     deck_rows = reloaded.profile["state"]["userDeckList"]
     check("落盘后编成仍在",
-          any(str(deck.get("userPieceId%02d5" % member_slot)) == str(instance) for deck in deck_rows),
+          any(str(deck.get("userPieceId%02d4" % member_slot)) == str(instance) for deck in deck_rows),
           "%d 字节" % info["bytes"])
     print("\n结晶筛选 / 详情 / 队伍编成 全部通过")
     return 0

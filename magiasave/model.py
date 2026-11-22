@@ -50,7 +50,7 @@ _ALLOWED_PATTERNS = [
     r"^state\.userPieceList(\[\d+\])?(\.(level|experience|lbCount|attack|defense|hp|protect|archive))?$",
     r"^state\.userQuestBattleList\[\d+\]\.(cleared|clearCount|rewardDone|missionStatus1|missionStatus2|missionStatus3)$",
     r"^state\.userSectionList\[\d+\]\.(canPlay|cleared)$",
-    r"^state\.userChapterList\[\d+\]\.cleared$",
+    r"^state\.userChapterList(\[\d+\]\.(chapterId|cleared|canPlay|userId|createdAt))?$",
     r"^state\.userGiftList(\[\d+\])?(\.(quantity|total))?$",
     r"^state\.user(Daily|Limited|Total|Doppel)ChallengeList\[\d+\]\.(clearedCount|clearedAt|count)$",
     r"^state\.userGachaKindList\[\d+\]\.(totalCount|dailyCount|weeklyCount|monthlyCount)$",
@@ -2581,9 +2581,39 @@ class Editor:
                 if self._ensure_quest(profile, qid, cleared, stamp):
                     touched += 1
         if not touched:
+            self._ensure_chapter(profile, chapter_id, cleared)
             raise ValidationError("这些小节已经是目标状态", code="already_present")
+        self._ensure_chapter(profile, chapter_id, cleared)
+        if cleared:
+            self._unlock_following_chapters(profile, chapter_id, chapters_meta, chapter_prereq, stamp)
+        extra.add("state.userChapterList")
         extra.add("state.userSectionList")
         extra.add("state.userQuestBattleList")
+
+    def _unlock_following_chapters(self, profile, chapter_id, chapters_meta, chapter_prereq, stamp):
+        """整章通关后把「以本章为前置」的下一章的入口打开（小节 canPlay=true）。"""
+        followers = []
+        for key, deps in (chapter_prereq or {}).items():
+            if chapter_id in [int(dep) for dep in deps or []]:
+                followers.append(int(key))
+        if not followers:
+            meta = chapters_meta.get(str(chapter_id)) or {}
+            part = meta.get("partNo")
+            number = meta.get("chapterNo")
+            if part is not None and number:
+                for other_key, other in chapters_meta.items():
+                    if (other.get("partNo") == part and other.get("chapterNo") == number + 1
+                            and not self._is_side_chapter(part, int(other_key))):
+                        followers.append(int(other_key))
+                        break
+        for next_id in followers:
+            next_meta = chapters_meta.get(str(next_id)) or {}
+            sections = sorted(int(x) for x in next_meta.get("sections") or [])
+            if not sections:
+                continue
+            for sid in sections:
+                self._ensure_section(profile, sid, False, stamp, can_play=True)
+            self._ensure_chapter(profile, next_id, False)
 
     def _op_chapter_unlock_only(self, profile, op, _force, extra):
         """只解锁不判通关：把该章及前置小节设为 canPlay=true。"""
@@ -2651,6 +2681,8 @@ class Editor:
                 touched += 1
         if not touched:
             raise ValidationError("这些小节已经解锁", code="already_present")
+        self._ensure_chapter(profile, chapter_id, False)
+        extra.add("state.userChapterList")
         extra.add("state.userSectionList")
 
     CHALLENGE_TABLES = (
@@ -4163,17 +4195,30 @@ class Editor:
         if "canPlay" not in op and "cleared" not in op:
             raise ValidationError("canPlay / cleared 至少要给一个", code="invalid_value")
 
+    def _ensure_chapter(self, profile, chapter_id, cleared):
+        rows = profile["state"].setdefault("userChapterList", [])
+        for row in rows:
+            if str(row.get("chapterId")) == str(chapter_id):
+                row["cleared"] = cleared
+                if cleared and row.get("canPlay") is not True:
+                    row["canPlay"] = True
+                return row
+        row = {
+            "userId": profile["state"]["gameUser"]["userId"],
+            "chapterId": int(chapter_id),
+            "cleared": cleared,
+            "canPlay": True,
+            "createdAt": self.stamp(),
+        }
+        rows.append(row)
+        return row
+
     def _op_chapter_set(self, profile, op, _force, extra):
         chapter_id = op.get("chapterId")
-        target = None
-        for row in profile["state"].get("userChapterList") or []:
-            if str(row.get("chapterId")) == str(chapter_id):
-                target = row
-                break
-        if target is None:
-            raise ValidationError("找不到章节: %r" % (chapter_id,), code="path_missing")
-        target["cleared"] = _bool(op.get("cleared"), "cleared")
-        extra.add("state.userChapterList[chapterId=%s].cleared" % chapter_id)
+        if chapter_id is None:
+            raise ValidationError("需要 chapterId", code="invalid_argument")
+        self._ensure_chapter(profile, chapter_id, _bool(op.get("cleared"), "cleared"))
+        extra.add("state.userChapterList")
 
     def _op_challenge_set(self, profile, op, _force, extra):
         table = op.get("table")

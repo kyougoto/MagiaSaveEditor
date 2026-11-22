@@ -208,7 +208,7 @@
     SCROLL.ready = false;
     var host = $('main');
     host.innerHTML = '<div class="empty">加载中…</div>';
-    var task;
+    var task = Promise.resolve();
     switch (S.tab) {
       case 'overview': task = renderOverview(); break;
       case 'resources': task = renderResources(); break;
@@ -3249,7 +3249,7 @@ function renderSectionDetail() {
           var saved = payload.saved;
           toast('已写出 ' + saved.path + '（revision ' + saved.revision + '，' + saved.parts + ' 片）', 'ok');
           $('openPath').value = saved.path;
-          return refreshStatus().then(function () { render(); });
+          return refreshStatus().then(function () { return Promise.resolve(render()); });
         });
       })
       .catch(fail);
