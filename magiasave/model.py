@@ -2625,8 +2625,8 @@ class Editor:
             sections = sorted(int(x) for x in next_meta.get("sections") or [])
             if not sections:
                 continue
-            for sid in sections:
-                self._ensure_section(profile, sid, False, stamp, can_play=True)
+            # 只开下一章的第一话（入口），不整章解锁；后续话仍按剧情推进逐话开启
+            self._ensure_section(profile, sections[0], False, stamp, can_play=True)
             self._ensure_chapter(profile, next_id, False)
 
     def _op_chapter_unlock_only(self, profile, op, _force, extra):
