@@ -3383,22 +3383,28 @@ function renderSectionDetail() {
   // ------------------------------------------------------------ 打开 / 保存
 
   function openArchive(path) {
-    return api('/api/open', { path: path }).then(function (payload) {
-      S.page = {};
-      toast('已打开 ' + payload.summary.label, 'ok');
-      return refreshStatus().then(function () { renderTabs(); render(); });
+    return api('/api/status').then(function (status) {
+      if (status.dirty && !window.confirm('当前存档「' + status.summary.label + '」有未保存的改动。放弃改动并打开所选存档？')) { return; }
+      return api('/api/open', { path: path }).then(function (payload) {
+        S.page = {};
+        toast('已打开 ' + payload.summary.label, 'ok');
+        return refreshStatus().then(function () { renderTabs(); render(); });
+      });
     }).catch(fail);
   }
 
   function saveAs() {
     var summary = (S.status && S.status.summary) || null;
-    var stem = summary ? String(summary.path).replace(/^.*[\/]/, '').replace(/\.zip$/i, '') : 'magia-save';
+    if (!summary) { toast('请先打开一份存档', 'err'); return; }
+    var stem = String(summary.path).split(/[\\/]/).pop().replace(/\.zip$/i, '') || 'magia-save';
     var suggestion = stem + '-edited-' + Date.now() + '.zip';
-    api('/api/pick', { mode: 'save', initial: summary ? summary.path : '', suggest: suggestion })
-      .then(function (payload) { return payload.path; })
-      .catch(function () { return null; })
+    function manualPath() { return window.prompt('另存为（不会覆盖原存档）', suggestion); }
+    api('/api/pick', { mode: 'save', initial: summary.path, suggest: suggestion })
+      .then(function (payload) {
+        if (payload.path) { return payload.path; }
+        return payload.available === false ? manualPath() : null;
+      }, manualPath)
       .then(function (path) {
-        if (!path) { path = window.prompt('另存为（不会覆盖原存档）', suggestion); }
         if (!path) { return null; }
         var label = window.prompt('存档标签（≤80 字符）', summary ? summary.label : 'edited');
         if (label === null) { return null; }
@@ -3456,8 +3462,6 @@ function renderSectionDetail() {
       if (status.loaded) {
         $('openPath').value = status.archive || '';
         applyHash();
-      } else {
-        $('openPath').value = 'H:/magia_server/magia-save-chino-1794718180238.zip';
       }
     }).catch(fail);
   }
