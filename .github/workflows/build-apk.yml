@@ -100,7 +100,11 @@ jobs:
           TASK=assembleDebug
           if [ "${{ inputs.build_type }}" = "release" ]; then TASK=assembleRelease; fi
           echo "执行 ./gradlew $TASK"
-          ./gradlew "$TASK" --no-daemon --stacktrace
+          # --no-daemon + 并行执行会让 Kotlin 插件计算 friendPathsSet 时跨线程
+          # 访问 root project 状态，触发
+          #   IllegalStateException: Current thread does not hold the state lock
+          # 单模块工程并行本来也没收益，这里显式关掉。
+          ./gradlew "$TASK" --no-daemon --no-parallel --stacktrace
 
       - name: 校验产物
         working-directory: android
