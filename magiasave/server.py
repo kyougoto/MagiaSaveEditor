@@ -17,6 +17,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 from . import archive as archive_mod
+from . import android_api
+from . import bridge
 from . import jsjson
 from . import paths
 from .catalog import Catalog
@@ -25,8 +27,6 @@ from .masters import Masters
 from .model import Editor
 
 ROOT_DIR = paths.bundle_root()
-WEB_DIR = paths.web_dir()
-ASSETS_DIR = paths.assets_dir()
 MIME = {
     ".html": "text/html; charset=utf-8",
     ".js": "application/javascript; charset=utf-8",
@@ -133,6 +133,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(self.api_catalog_items(query))
             if path == "/api/raw":
                 return self._json(self.api_raw(query))
+            if path == "/api/android":
+                return self._json(self.api_android())
+            if path == "/api/workspace":
+                return self._json(self.api_workspace())
             if path == "/api/health":
                 return self._json({"ok": True})
             return self._json({"ok": False, "error": "未知接口: %s" % path}, 404)
@@ -161,6 +165,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(self.api_raw_post(body))
             if path == "/api/pick":
                 return self._json(self.api_pick(body))
+            if path == "/api/import":
+                return self._json(self.api_import(body))
+            if path == "/api/share":
+                return self._json(self.api_export_share(body))
+            if path == "/api/open-external":
+                return self._json(self.api_open_external(body))
             return self._json({"ok": False, "error": "未知接口: %s" % path}, 404)
         except ArchiveError as exc:
             self._json({"ok": False, "error": str(exc), "code": exc.code}, 400)
@@ -172,8 +182,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def _static(self, rel):
         safe = os.path.normpath(rel).lstrip("\\")
-        target = os.path.join(WEB_DIR, safe)
-        if not os.path.abspath(target).startswith(os.path.abspath(WEB_DIR)):
+        target = os.path.join(paths.web_dir(), safe)
+        if not os.path.abspath(target).startswith(os.path.abspath(paths.web_dir())):
             return self._json({"ok": False, "error": "非法路径"}, 400)
         if not os.path.isfile(target):
             return self._json({"ok": False, "error": "文件不存在: %s" % rel}, 404)
@@ -184,8 +194,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def _asset(self, rel):
         safe = os.path.normpath(rel).lstrip("\\")
-        target = os.path.join(ASSETS_DIR, safe)
-        if not os.path.abspath(target).startswith(os.path.abspath(ASSETS_DIR)):
+        target = os.path.join(paths.assets_dir(), safe)
+        if not os.path.abspath(target).startswith(os.path.abspath(paths.assets_dir())):
             return self._json({"ok": False, "error": "非法路径"}, 400)
         if not os.path.isfile(target):
             return self._json({"ok": False, "error": "素材不存在: %s" % rel}, 404)
@@ -379,8 +389,17 @@ class Handler(BaseHTTPRequestHandler):
         with self.session.lock:
             editor = self.session.require()
             info = editor.archive.save(out_path, profile=editor.profile, label=label)
+            # Android：out_path 是 app 私有缓存里的 outbox 文件，用户看不见，
+            # 必须推回他在系统对话框里选的那个位置（Uri）。
+            pushed = bridge.commit_save(info.get("path") or out_path) if bridge.available() else False
             self.session.open(out_path)
-            return {"ok": True, "saved": info}
+            return {"ok": True, "saved": info, "exported": pushed}
+
+
+
+# Android 扩展（选文件 / 导入 / 分享）——必须在 import 时就挂上，
+# 否则 `python -m magiasave.server` 下 main() 之外的代码不会执行，接口会 500。
+android_api.install(Handler)
 
 
 def main(argv=None):
@@ -409,3 +428,4 @@ def main(argv=None):
 
 if __name__ == "__main__":
     sys.exit(main())
+

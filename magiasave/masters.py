@@ -10,12 +10,12 @@
 import json
 import os
 
-_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+from . import paths
 
 
 class Masters:
     def __init__(self, data_dir=None):
-        self.data_dir = data_dir or _DATA_DIR
+        self.data_dir = data_dir or paths.data_dir()
         self.cards = {}
         self.pieces = {}
         self.cards_meta = {}

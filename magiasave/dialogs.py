@@ -1,16 +1,18 @@
-"""原生文件对话框（tkinter）。
+"""文件对话框：Android 走宿主桥，桌面走 tkinter。
 
 只在本机使用：网页里点「浏览…」时由服务端弹窗，返回绝对路径。
-tkinter 不可用时返回 None，前端退回手动输入路径。
+两条路都不通时返回 None，前端退回手动输入路径。
 """
 
 import os
 import threading
 
+from . import bridge
+
 _LOCK = threading.Lock()
 
 
-def available():
+def _tk_available():
     try:
         import tkinter  # noqa: F401
         from tkinter import filedialog  # noqa: F401
@@ -19,9 +21,28 @@ def available():
         return False
 
 
+def available():
+    if bridge.available():
+        return True
+    return _tk_available()
+
+
 def pick(mode="open", initial=None, suggest=None):
-    """mode: open / save。返回绝对路径或 None（用户取消 / 无 tkinter）。"""
-    if not available():
+    """mode: open / save。返回绝对路径或 None（用户取消 / 两端都不可用）。"""
+    if bridge.available():
+        try:
+            path = bridge.pick(mode, suggest=suggest, initial=initial)
+        except Exception:
+            path = None
+        if not path:
+            return None
+        try:
+            return os.path.abspath(path)
+        except Exception:
+            # 极端情况下（路径含非法字符）原样返回，让上层自己报错。
+            return path
+
+    if not _tk_available():
         return None
     import tkinter as tk
     from tkinter import filedialog

@@ -3354,10 +3354,76 @@ function renderSectionDetail() {
           var saved = payload.saved;
           toast('已写出 ' + saved.path + '（revision ' + saved.revision + '，' + saved.parts + ' 片）', 'ok');
           $('openPath').value = saved.path;
-          return refreshStatus().then(function () { return Promise.resolve(render()); });
+          return refreshStatus().then(function () { return Promise.resolve(render()); })
+            .then(function () { return offerShare(saved.path); });
         });
       })
       .catch(fail);
+  }
+
+
+  /* --- android patch --- */
+  // 安卓上写出的存档还在 app 私有目录里，用户拿不到；问一句要不要分享出去。
+  function offerShare(path) {
+    if (!S.android) { return Promise.resolve(); }
+    if (!window.confirm('存档已生成。要现在分享出去吗？（发给自己 / 网盘 / 文件管理器）')) { return Promise.resolve(); }
+    return api('/api/share', { path: path }).then(function (payload) {
+      if (!payload.ok) { toast('分享失败：' + (payload.error || '未知原因'), 'err'); }
+    }).catch(function (error) { toast('分享失败：' + error.message, 'err'); });
+  }
+
+  // 用系统文件选择器挑一个 zip，拷进工作区再打开。
+  function importArchive() {
+    return api('/api/pick', { mode: 'open', suggest: '', initial: '' }).then(function (payload) {
+      if (!payload.available) {
+        toast('这台设备没有可用的文件选择器', 'err');
+        return null;
+      }
+      if (!payload.path) { return null; }  // 用户取消
+      toast('正在导入…', 'ok');
+      return api('/api/import', { path: payload.path }).then(function (result) {
+        toast('已导入 ' + result.path, 'ok');
+        return openArchive(result.path);
+      });
+    }).catch(fail);
+  }
+
+  // 从工作区里已有的 zip 里挑一个（安卓上没文件管理器也能用）。
+  function pickFromWorkspace() {
+    return api('/api/workspace').then(function (data) {
+      if (!data.rows.length) {
+        toast('工作区里还没有存档，先用「导入存档…」', 'err');
+        return null;
+      }
+      var lines = data.rows.map(function (row, index) {
+        return (index + 1) + '. ' + row.name + '（' + Math.round(row.bytes / 1024) + ' KB）';
+      }).join('\n');
+      var answer = window.prompt('选择要打开的存档（输入序号）：\n' + lines, '1');
+      if (!answer) { return null; }
+      var pick = data.rows[parseInt(answer, 10) - 1];
+      if (!pick) { toast('序号超出范围', 'err'); return null; }
+      return openArchive(pick.path);
+    }).catch(fail);
+  }
+
+  function setupAndroid() {
+    return api('/api/android').then(function (info) {
+      S.android = info.android;
+      // 设备上有桥（或就是安卓）才显示导入按钮，桌面保持原样。
+      if (info.android || info.bridge) {
+        $('btnImport').classList.remove('hidden');
+        $('btnImport').textContent = info.bridge ? '导入存档…' : '工作区存档…';
+        $('btnImport').addEventListener('click', function () {
+          if (info.bridge) { return importArchive(); }
+          return pickFromWorkspace();
+        });
+      }
+      // 安卓上没文件管理器的话，原来的「浏览…」不能用，提示换一条路。
+      if (info.android && !info.bridge) {
+        $('btnPick').textContent = '工作区…';
+      }
+      return info;
+    }).catch(function () { S.android = false; return null; });
   }
 
   function boot() {
@@ -3404,10 +3470,19 @@ function renderSectionDetail() {
       if (suppressHash) { suppressHash = false; return; }
       applyHash();
     });
-    refreshStatus().then(function (status) {
+    setupAndroid().then(function () {
+      return refreshStatus();
+    }).then(function (status) {
       if (status.loaded) {
         $('openPath').value = status.archive || '';
         applyHash();
+      } else if (S.android) {
+        // 安卓上没有 H 盘，留空并提示用户导入。
+        $('openPath').placeholder = '点「导入存档…」选择 zip，或直接填路径';
+        $('openPath').value = '';
+        if ($('emptyHint')) {
+          $('emptyHint').textContent = '点上方「导入存档…」选择存档 zip（MagiaOfflineSlotArchive/v1）。';
+        }
       } else {
         $('openPath').value = 'H:/magia_server/magia-save-chino-1794718180238.zip';
       }

@@ -1,5 +1,8 @@
 # 魔法纪录 离线存档编辑器
 
+> **安卓版**：本仓库含一条 Android 适配分支（Chaquo Python + WebView），
+> 桌面用法与上游完全一致。构建与限制见 **[android/README.md](android/README.md)**。
+
 面向 `MAGIA-1.6.4`（b1713001033）本地私服存档的读写工具：解析 `MagiaOfflineSlotArchive/v1` 容器，
 还原 `off3_*` 分片协议与 `json-shapes-v1` 编码，本地 Web 界面，落盘前用客户端同款规则自检。
 **完全自包含**：主数据与素材图都在 `data/` 与 `assets/` 里，运行时不依赖游戏数据包。

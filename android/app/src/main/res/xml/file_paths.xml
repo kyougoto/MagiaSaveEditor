@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  分享 / 打开外部应用时，FileProvider 允许把哪些目录里的文件授出去。
+  只开放工作区（保存好的存档）与缓存 outbox，别的一概不给。
+-->
+<paths>
+    <files-path name="workspace" path="workspace/" />
+    <cache-path name="outbox" path="outbox/" />
+</paths>

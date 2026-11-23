@@ -1,0 +1,7 @@
+// 顶层 build.gradle：只声明插件版本，具体模块见 app/build.gradle
+plugins {
+    id 'com.android.application' version '8.6.1' apply false
+    id 'org.jetbrains.kotlin.android' version '2.0.21' apply false
+    // Chaquo Python。免费版仅限非商业用途；本项目 GPL-3.0，符合其条款。
+    id 'com.chaquo.python' version '16.1.0' apply false
+}

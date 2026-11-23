@@ -1,0 +1,116 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+    id 'com.chaquo.python'
+}
+
+// ---------------------------------------------------------------------------
+// 仓库根目录（= 安卓工程目录的上一级）。Python 源码与离线数据都在那儿，
+// 不复制第二份，靠 build 阶段的 stageBundle 任务同步进 APK。
+// ---------------------------------------------------------------------------
+def repoRoot = rootProject.projectDir.parentFile
+def webDir = new File(repoRoot, "web")
+def dataDir = new File(repoRoot, "data")
+def assetDir = new File(repoRoot, "assets")
+
+android {
+    namespace 'io.github.magiasaveeditor.android'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "io.github.magiasaveeditor.android"
+        minSdk 24
+        // 34 已完全强制分区存储；本应用全程走 SAF，不需要 MANAGE_EXTERNAL_STORAGE
+        targetSdk 34
+        versionCode 1
+        versionName "1.0.0-android-personal"
+
+        // 只打 arm64-v8a（个人使用分享的刻意选择）：Chaquo 每个 ABI 都要带一份
+        // Python，双 ABI 体积翻倍。真要兼容 32 位老机再改成
+        // "arm64-v8a, armeabi-v7a" 重编。
+        ndk {
+            abiFilters "arm64-v8a"
+        }
+    }
+
+    buildTypes {
+        release {
+            // 用 debug 签名方便本地装包；正式发布请换成自己的 keystore。
+            signingConfig signingConfigs.debug
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    androidResources {
+        // 这些文件已经是最终形态，不需要 aapt 再加工，原样打包省时间
+        noCompress += ["zip", "json", "png", "txt"]
+    }
+
+    // 关键：assets 只来自 stageBundle 的产物，绝不能把整个仓库根塞进来，
+    // 否则 tests/ tools/ 甚至 .git 都会被当成 assets。
+    sourceSets {
+        main {
+            assets.srcDirs = [layout.buildDirectory.dir("generated/bundle").get().asFile]
+        }
+    }
+
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+}
+
+chaquopy {
+    defaultConfig {
+        version "3.11"
+        // 后端只用 Python 标准库，pip 留空。将来引入第三方包时写在这里。
+        pip {
+        }
+        pyc {
+            // 生成 .pyc：启动快一点，也不至于源码被随便读走
+            src = true
+        }
+    }
+    sourceSets {
+        main {
+            srcDirs = [repoRoot]
+            // 只把 magiasave 包塞进 app.imy
+            include "magiasave/**/*.py"
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'androidx.activity:activity-ktx:1.9.3'
+    implementation 'androidx.core:core-ktx:1.13.1'
+    implementation 'androidx.webkit:webkit:1.11.0'
+}
+
+// ---------------------------------------------------------------------------
+// 把 web/ data/ assets/ 汇总成 assets/bundle/{web,data,assets}。
+// BundleInstaller 按这个结构解到 filesDir/bundle，Python 那边通过
+// MAGIA_BUNDLE_ROOT 指过去。
+// ---------------------------------------------------------------------------
+def stageBundle = tasks.register("stageBundle", Sync) {
+    into layout.buildDirectory.dir("generated/bundle")
+    from(webDir) { into "web" }
+    from(dataDir) { into "data" }
+    from(assetDir) { into "assets" }
+}
+
+tasks.configureEach { task ->
+    if (task.name.startsWith("merge") && task.name.endsWith("Assets")) {
+        task.dependsOn(stageBundle)
+    }
+}
