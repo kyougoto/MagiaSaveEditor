@@ -45,6 +45,24 @@ jobs:
         with:
           gradle-version: '8.9'
 
+      # ---------------------------------------------------------------------
+      # Chaquopy 的 pyc.src 要求「宿主 Python 的主版本号 == target Python」，
+      # 也就是编译 .pyc 必须用 3.11。ubuntu-latest 自带的是 3.12/3.14，
+      # 直接构建会失败于：
+      #   Failed to compile to .pyc format: buildPython version 3.x is incompatible
+      # 所以这里装一个 3.11，并通过 MAGIA_BUILD_PYTHON 告诉 build.gradle 用它。
+      # ---------------------------------------------------------------------
+      - name: 准备宿主编译用 Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 确认 Python 版本
+        run: |
+          python3 --version
+          echo "MAGIA_BUILD_PYTHON=$(command -v python3)" >> "$GITHUB_ENV"
+          echo "已指定 buildPython: $(command -v python3)"
+
       - name: 生成 gradle wrapper
         working-directory: android
         run: gradle wrapper --gradle-version 8.9
@@ -61,7 +79,7 @@ jobs:
             ~/.gradle/wrapper
             ~/.chaquopy
             ~/.cache/chaquopy
-          key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle', 'android/gradle/wrapper/gradle-wrapper.properties', '.github/workflows/build-apk.yml') }}
           restore-keys: |
             ${{ runner.os }}-gradle-
 

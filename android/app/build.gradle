@@ -80,6 +80,14 @@ chaquopy {
             // 生成 .pyc：启动快一点，也不至于源码被随便读走
             src = true
         }
+        // pyc.src 需要用「主版本号与 target 相同」的宿主 Python 来编译 .pyc。
+        // 本机 / CI 上的系统 python3 可能是 3.12/3.13/3.14，直接编译会报
+        // "buildPython version X is incompatible"。这里允许用环境变量指定
+        // 一个 3.11 的解释器（CI 里由 setup-python 提供）；不设则沿用默认查找。
+        String pyHostPath = System.getenv("MAGIA_BUILD_PYTHON")
+        if (pyHostPath != null && !pyHostPath.isEmpty()) {
+            buildPython pyHostPath
+        }
     }
     sourceSets {
         main {
