@@ -92,6 +92,12 @@ jobs:
           for d in web data assets; do
             test -d "$d" || { echo "::error::缺少 $d/"; exit 1; }
           done
+          echo "--- assets/ 顶层 ---"
+          ls assets | head
+          echo "--- data/ 顶层 ---"
+          ls data | head
+          echo "--- 大小合计 ---"
+          du -sh web data assets | tail -3
 
       - name: 构建 APK
         working-directory: android
@@ -114,12 +120,41 @@ jobs:
           if [ -z "$APK" ]; then echo "::error::没有生成 APK"; exit 1; fi
           echo "APK: $APK"
           ls -lh "$APK"
+
+          # 用 unzip -Z1（只列名字，不截断）统计，不要用 unzip -l 的表格输出：
+          # 表格会把长路径折行/截断，grep 计数不可靠。
+          unzip -Z1 "$APK" > /tmp/apk_entries.txt
+          echo "APK 总条目: $(wc -l < /tmp/apk_entries.txt)"
+
           echo "--- lib/ 下的 ABI（应只有 arm64-v8a）---"
-          unzip -l "$APK" | awk '$4 ~ /^lib\// {split($4,a,"/"); print a[2]}' | sort -u
+          grep '^lib/' /tmp/apk_entries.txt | cut -d/ -f2 | sort -u | tee /tmp/abi.txt
+          if [ "$(wc -l < /tmp/abi.txt)" -ne 1 ] || [ "$(cat /tmp/abi.txt)" != "arm64-v8a" ]; then
+            echo "::error::ABI 不符合预期（应只有 arm64-v8a）"
+            exit 1
+          fi
+
           echo "--- assets/bundle/ 条目数 ---"
-          unzip -l "$APK" | grep -c 'assets/bundle/' || true
-          echo "--- 是否打进了 Python 源码包 ---"
-          unzip -l "$APK" | grep -E 'assets/chaquopy/' | head -5 || echo "（未找到 chaquopy 资产，请检查）"
+          N=$(grep -c '^assets/bundle/' /tmp/apk_entries.txt || true)
+          echo "$N"
+          # web/ 只有 3 个文件、data/ 23 个、assets/ 2600+ 个，正常总量应在 2600 以上。
+          # 低于此说明 stageBundle 没把内容塞进 APK，属于空壳包，必须拦住。
+          if [ "$N" -lt 1000 ]; then
+            echo "::error::assets/bundle/ 只有 $N 个条目，离线数据没有打进去"
+            echo "--- stageBundle 产物 ---"
+            find app/build/generated/bundle -maxdepth 2 -type d | head -20 || true
+            echo "--- 其中文件数 ---"
+            find app/build/generated/bundle -type f | wc -l || true
+            exit 1
+          fi
+          echo "样例："
+          grep '^assets/bundle/' /tmp/apk_entries.txt | head -3
+
+          echo "--- Python 运行时与源码包 ---"
+          echo "assets/chaquopy/ 条目数: $(grep -c '^assets/chaquopy/' /tmp/apk_entries.txt || true)"
+          grep -E '^assets/chaquopy/app\.imy' /tmp/apk_entries.txt || {
+            echo "::error::assets/chaquopy/app.imy 缺失，Python 源码没打进去"
+            exit 1
+          }
 
       - name: 上传 APK
         uses: actions/upload-artifact@v4
