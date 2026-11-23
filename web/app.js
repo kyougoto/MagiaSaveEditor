@@ -489,34 +489,78 @@
 
   // ------------------------------------------------------------ 页内选择器（模态框）
 
+  var pickerOpener = null, previewOpener = null, inertForDialog = [];
+  function topDialog() { return $('previewModal') || ($('modal').classList.contains('show') ? $('modal') : null); }
+  function syncDialogLayer() {
+    inertForDialog.forEach(function (node) { node.inert = false; });
+    inertForDialog = [];
+    var active = topDialog();
+    if (!active) { return; }
+    Array.prototype.forEach.call(document.body.children, function (node) {
+      if (node !== active && node.id !== 'toast' && node.tagName !== 'SCRIPT' && !node.inert && 'inert' in node) {
+        node.inert = true; inertForDialog.push(node);
+      }
+    });
+  }
+  function focusInView(node) {
+    if (node && node.isConnected && !node.disabled && node.getClientRects().length) {
+      node.focus({ preventScroll: true }); return document.activeElement === node;
+    }
+    return false;
+  }
+  function dialogKeys(event) {
+    var layer = topDialog(); if (!layer || event.isComposing || event.keyCode === 229) { return; }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      if (layer.id === 'previewModal') { closePreview(); } else { closeModal(); }
+    } else if (event.key === 'Tab') {
+      var nodes = layer.querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),a[href],[tabindex]');
+      var first = null, last = null, i;
+      for (i = 0; i < nodes.length; i++) {
+        if (nodes[i].tabIndex >= 0 && nodes[i].getClientRects().length) { first = nodes[i]; break; }
+      }
+      for (i = nodes.length - 1; i >= 0; i--) {
+        if (nodes[i].tabIndex >= 0 && nodes[i].getClientRects().length) { last = nodes[i]; break; }
+      }
+      if (first && (!layer.contains(document.activeElement) || (event.shiftKey ? document.activeElement === first : document.activeElement === last))) {
+        event.preventDefault(); (event.shiftKey ? last : first).focus();
+      }
+    }
+  }
+
   function closeModal() {
     var host = $('modal');
+    if (!host.classList.contains('show')) { return; }
     host.classList.remove('show');
+    syncDialogLayer();
+    if (!focusInView(pickerOpener)) { focusInView(document.querySelector('#tabs .active')); }
+    pickerOpener = null;
     host.setAttribute('aria-hidden', 'true');
     $('modalSearch').oninput = null;
   }
 
-  function openModal(title, placeholder) {
+  function openModal(title, placeholder, searchable) {
     var host = $('modal');
+    if (!host.classList.contains('show')) { pickerOpener = document.activeElement; }
+    host.classList.toggle('picker-searchable', searchable);
+    host.querySelector('[role="dialog"]').setAttribute('aria-labelledby', 'modalTitle');
     $('modalTitle').textContent = title;
     var input = $('modalSearch');
-    input.classList.remove('hidden');
+    input.classList.toggle('hidden', !searchable);
     input.value = '';
     input.placeholder = placeholder || '搜索名称或 ID';
     $('modalMeta').textContent = '';
     $('modalBody').innerHTML = '<div class="empty">加载中…</div>';
     host.classList.add('show');
     host.setAttribute('aria-hidden', 'false');
-    input.focus();
+    syncDialogLayer();
+    focusInView(searchable ? input : $('modalClose'));
     return host;
   }
 
   /* config: { title, placeholder, load(q), meta(data), render(rows), bind(host, rows) } */
   function openPicker(config) {
-    openModal(config.title, config.placeholder);
-    if (config.search === false) {
-      $('modalSearch').classList.add('hidden');
-    }
+    openModal(config.title, config.placeholder, config.search !== false);
     function load(query) {
       $('modalBody').innerHTML = '<div class="empty">加载中…</div>';
       config.load(query).then(function (data) {
@@ -2423,19 +2467,25 @@ function renderCharaDetail() {
 
   function closePreview() {
     var node = document.getElementById('previewModal');
-    if (node) { node.parentNode.removeChild(node); }
+    if (node) {
+      node.parentNode.removeChild(node); syncDialogLayer();
+      if (!focusInView(previewOpener)) { focusInView($('modalClose')); }
+      previewOpener = null;
+    }
   }
 
-  function openPreview(title, html) {
+  function openPreview(title, html, trigger) {
     closePreview();
+    previewOpener = trigger || document.activeElement;
     var host = document.createElement('div');
     host.id = 'previewModal';
     host.className = 'modal show';
-    host.innerHTML = '<div class="panel" role="dialog" aria-modal="true">'
-      + '<div class="head"><strong>' + esc(title) + '</strong><span class="spacer"></span>'
+    host.innerHTML = '<div class="panel" role="dialog" aria-modal="true" aria-labelledby="piecePreviewTitle">'
+      + '<div class="head"><strong id="piecePreviewTitle">' + esc(title) + '</strong><span class="spacer"></span>'
       + '<button class="ghost mini" data-preview-close>关闭</button></div>'
       + '<div class="body">' + html + '</div></div>';
-    document.body.appendChild(host);
+    document.body.appendChild(host); syncDialogLayer();
+    focusInView(host.querySelector('[data-preview-close]'));
     host.addEventListener('click', function (event) {
       if (event.target === host) { closePreview(); }
       else if (event.target.closest('[data-preview-close]')) { closePreview(); }
@@ -2569,7 +2619,9 @@ function renderCharaDetail() {
             button.addEventListener('click', function () {
               api('/api/view/piece-master?pieceId=' + encodeURIComponent(button.getAttribute('data-preview')))
                 .then(function (detail) {
-                  openPreview(detail.name || ('结晶 ' + detail.pieceId), piecePreviewHtml(detail));
+                  if (button.isConnected && $('modal').classList.contains('show')) {
+                    openPreview(detail.name || ('结晶 ' + detail.pieceId), piecePreviewHtml(detail), button);
+                  }
                 }).catch(fail);
             });
           });
@@ -3367,11 +3419,7 @@ function renderSectionDetail() {
     $('modal').addEventListener('click', function (event) {
       if (event.target === $('modal')) { closeModal(); }
     });
-    document.addEventListener('keydown', function (event) {
-      if (event.key !== 'Escape') { return; }
-      if (document.getElementById('previewModal')) { closePreview(); return; }
-      if ($('modal').classList.contains('show')) { closeModal(); }
-    });
+    document.addEventListener('keydown', dialogKeys);
     // 选中条目后立即收起选择器（委托一次，picker 重开不会叠加监听）。
     $('modalBody').addEventListener('click', function (event) {
       var target = event.target;
@@ -3391,11 +3439,11 @@ function renderSectionDetail() {
     });
     $('btnSave').addEventListener('click', saveAs);
     $('btnUndo').addEventListener('click', function () {
-      api('/api/undo').then(function () { toast('已撤销一步', 'ok'); return refreshStatus().then(render); }).catch(fail);
+      api('/api/undo', {}).then(function () { toast('已撤销一步', 'ok'); return refreshStatus().then(render); }).catch(fail);
     });
     $('btnDiscard').addEventListener('click', function () {
       if (!window.confirm('丢弃全部未保存改动？')) { return; }
-      api('/api/discard').then(function () {
+      api('/api/discard', {}).then(function () {
         toast('已回到磁盘上的存档状态', 'ok');
         return refreshStatus().then(render);
       }).catch(fail);
