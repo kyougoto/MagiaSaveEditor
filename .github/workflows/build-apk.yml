@@ -1,0 +1,119 @@
+name: Build APK
+
+# 手动触发（Actions 页面点 Run workflow），推 v* tag 时也会自动出包。
+on:
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: '构建类型'
+        required: true
+        default: 'debug'
+        type: choice
+        options:
+          - debug
+          - release
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # Chaquopy 首次要下载 arm64 的 Python target（约 20 MB），加上 45 MB 资源打包，
+    # 冷缓存大约 15-25 分钟，给足余量。
+    timeout-minutes: 90
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      # ---------------------------------------------------------------------
+      # 仓库里没有提交 gradle-wrapper.jar（二进制，按惯例不入库），
+      # 所以这里现装一份 Gradle，再在 android/ 下生成 wrapper。
+      # ---------------------------------------------------------------------
+      - name: 准备 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: 安装 Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: 生成 gradle wrapper
+        working-directory: android
+        run: gradle wrapper --gradle-version 8.9
+
+      # ---------------------------------------------------------------------
+      # 缓存 Gradle 依赖（含 Chaquo 插件）与 Chaquo 下载的 Python target。
+      # 注意：hashFiles 的路径是相对仓库根的，这里不要加 working-directory。
+      # ---------------------------------------------------------------------
+      - name: 缓存 Gradle 与 Chaquo 依赖
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            ~/.chaquopy
+            ~/.cache/chaquopy
+          key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: 确认离线数据齐全
+        run: |
+          echo "web/     $(find web -type f | wc -l) 个文件"
+          echo "data/    $(find data -type f | wc -l) 个文件, $(du -sh data | cut -f1)"
+          echo "assets/  $(find assets -type f | wc -l) 个文件, $(du -sh assets | cut -f1)"
+          # stageBundle 依赖这三个目录，缺了会打出空壳 APK，先挡住
+          for d in web data assets; do
+            test -d "$d" || { echo "::error::缺少 $d/"; exit 1; }
+          done
+
+      - name: 构建 APK
+        working-directory: android
+        run: |
+          set -o pipefail
+          TASK=assembleDebug
+          if [ "${{ inputs.build_type }}" = "release" ]; then TASK=assembleRelease; fi
+          echo "执行 ./gradlew $TASK"
+          ./gradlew "$TASK" --no-daemon --stacktrace
+
+      - name: 校验产物
+        working-directory: android
+        run: |
+          set -e
+          APK=$(find app/build/outputs/apk -name '*.apk' | head -1)
+          if [ -z "$APK" ]; then echo "::error::没有生成 APK"; exit 1; fi
+          echo "APK: $APK"
+          ls -lh "$APK"
+          echo "--- lib/ 下的 ABI（应只有 arm64-v8a）---"
+          unzip -l "$APK" | awk '$4 ~ /^lib\// {split($4,a,"/"); print a[2]}' | sort -u
+          echo "--- assets/bundle/ 条目数 ---"
+          unzip -l "$APK" | grep -c 'assets/bundle/' || true
+          echo "--- 是否打进了 Python 源码包 ---"
+          unzip -l "$APK" | grep -E 'assets/chaquopy/' | head -5 || echo "（未找到 chaquopy 资产，请检查）"
+
+      - name: 上传 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MagiaSaveEditor-${{ inputs.build_type || 'debug' }}-${{ github.sha }}
+          path: android/app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: 失败时保留报告
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs-${{ github.sha }}
+          path: |
+            android/app/build/reports/
+            android/build/reports/
+          if-no-files-found: ignore
+          retention-days: 7
