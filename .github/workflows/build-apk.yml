@@ -140,10 +140,12 @@ jobs:
           # 低于此说明 stageBundle 没把内容塞进 APK，属于空壳包，必须拦住。
           if [ "$N" -lt 1000 ]; then
             echo "::error::assets/bundle/ 只有 $N 个条目，离线数据没有打进去"
-            echo "--- stageBundle 产物 ---"
-            find app/build/generated/bundle -maxdepth 2 -type d | head -20 || true
+            echo "--- APK 内 assets 顶层分布 ---"
+            grep '^assets/' /tmp/apk_entries.txt | cut -d/ -f1-3 | sort | uniq -c | sort -rn | head -20
+            echo "--- stageBundle 产物（AGP 实际输出目录）---"
+            find app/build/generated -maxdepth 4 -type d 2>/dev/null | head -20 || true
             echo "--- 其中文件数 ---"
-            find app/build/generated/bundle -type f | wc -l || true
+            find app/build/generated -type f 2>/dev/null | wc -l || true
             exit 1
           fi
           echo "样例："

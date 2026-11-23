@@ -52,9 +52,14 @@ abstract class StageBundleTask extends DefaultTask {
 
     @TaskAction
     void stage() {
-        def root = destinationDir.get().asFile
-        // 先清空，避免上一次构建的残留文件混进包里
-        project.delete(root)
+        // AGP 的 addGeneratedSourceDirectory 会把 destinationDir 的「内容」并入
+        // assets 根，目的地路径本身会被忽略（实际输出在
+        // build/generated/assets/stageBundle）。所以真正的结构要建在 descDir 下面：
+        //   <dest>/bundle/{web,data,assets}
+        // 打进 APK 后就是 assets/bundle/{web,data,assets}，
+        // 正是 BundleInstaller 读取的路径。
+        def root = new File(destinationDir.get().asFile, "bundle")
+        project.delete(destinationDir.get().asFile)
         root.mkdirs()
         copyInto("web", webSources.singleFile, new File(root, "web"))
         copyInto("data", dataSources.singleFile, new File(root, "data"))
