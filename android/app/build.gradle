@@ -1,3 +1,10 @@
+import org.gradle.api.DefaultTask
+import org.gradle.api.file.ConfigurableFileCollection
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.tasks.InputFiles
+import org.gradle.api.tasks.OutputDirectory
+import org.gradle.api.tasks.TaskAction
+
 plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
@@ -9,9 +16,69 @@ plugins {
 // 不复制第二份，靠 build 阶段的 stageBundle 任务同步进 APK。
 // ---------------------------------------------------------------------------
 def repoRoot = rootProject.projectDir.parentFile
-def webDir = new File(repoRoot, "web")
-def dataDir = new File(repoRoot, "data")
-def assetDir = new File(repoRoot, "assets")
+def repoWebDir = new File(repoRoot, "web")
+def repoDataDir = new File(repoRoot, "data")
+def repoAssetDir = new File(repoRoot, "assets")
+
+// ---------------------------------------------------------------------------
+// 把 web/ data/ assets/ 汇总成 assets/bundle/{web,data,assets}。
+// BundleInstaller 按这个结构解到 filesDir/bundle，Python 那边通过
+// MAGIA_BUNDLE_ROOT 指过去。
+//
+// 不能直接给 Sync 写死 into 路径、只靠 dependsOn 挂钩：
+// AGP 在配置阶段就会扫描 assets 目录，全新 checkout 上目录还不存在，
+// 对应任务被判 NO-SOURCE 直接跳过，最后打出一个只有 Python 运行时、
+// 没有任何离线数据的空壳 APK（assets/bundle/ 条目数为 0）。
+//
+// 所以这里定义一个带 @OutputDirectory 属性的任务，交给
+// AndroidComponents#addGeneratedSourceDirectory 绑定到 assets，
+// 由 AGP 自己保证「先跑这个任务、再收集产物」。
+// ---------------------------------------------------------------------------
+abstract class StageBundleTask extends DefaultTask {
+
+    // 用 @InputFiles 而不是 @InputDirectory：源目录缺失时由任务自己给出
+    // 清晰的中文报错，而不是在配置阶段就被 Gradle 拒绝。
+    @InputFiles
+    abstract ConfigurableFileCollection getWebSources()
+
+    @InputFiles
+    abstract ConfigurableFileCollection getDataSources()
+
+    @InputFiles
+    abstract ConfigurableFileCollection getAssetSources()
+
+    @OutputDirectory
+    abstract DirectoryProperty getDestinationDir()
+
+    @TaskAction
+    void stage() {
+        def root = destinationDir.get().asFile
+        // 先清空，避免上一次构建的残留文件混进包里
+        project.delete(root)
+        root.mkdirs()
+        copyInto("web", webSources.singleFile, new File(root, "web"))
+        copyInto("data", dataSources.singleFile, new File(root, "data"))
+        copyInto("assets", assetSources.singleFile, new File(root, "assets"))
+
+        // 兜底自检：本次应该同步上千个文件，太少说明源目录是空的
+        def files = []
+        root.eachFileRecurse { f -> if (f.isFile()) files << f }
+        logger.lifecycle("stageBundle: 已同步 ${files.size()} 个文件到 $root")
+        if (files.size() < 100) {
+            throw new GradleException("stageBundle 只同步了 ${files.size()} 个文件，源目录可能为空")
+        }
+    }
+
+    private void copyInto(String label, File src, File dest) {
+        if (!src.isDirectory()) {
+            throw new GradleException("缺少源目录: $label/（$src）")
+        }
+        project.copy {
+            from(src)
+            into(dest)
+        }
+    }
+}
 
 android {
     namespace 'io.github.magiasaveeditor.android'
@@ -55,11 +122,12 @@ android {
         noCompress += ["zip", "json", "png", "txt"]
     }
 
-    // 关键：assets 只来自 stageBundle 的产物，绝不能把整个仓库根塞进来，
+    // assets 的内容全部由下面的 stageBundle 生成并通过
+    // addGeneratedSourceDirectory 挂进来；这里不能把仓库根塞进 srcDirs，
     // 否则 tests/ tools/ 甚至 .git 都会被当成 assets。
     sourceSets {
         main {
-            assets.srcDirs = [layout.buildDirectory.dir("generated/bundle").get().asFile]
+            assets.srcDirs = []
         }
     }
 
@@ -105,20 +173,17 @@ dependencies {
     implementation 'androidx.webkit:webkit:1.11.0'
 }
 
-// ---------------------------------------------------------------------------
-// 把 web/ data/ assets/ 汇总成 assets/bundle/{web,data,assets}。
-// BundleInstaller 按这个结构解到 filesDir/bundle，Python 那边通过
-// MAGIA_BUNDLE_ROOT 指过去。
-// ---------------------------------------------------------------------------
-def stageBundle = tasks.register("stageBundle", Sync) {
-    into layout.buildDirectory.dir("generated/bundle")
-    from(webDir) { into "web" }
-    from(dataDir) { into "data" }
-    from(assetDir) { into "assets" }
+def bundleDir = layout.buildDirectory.dir("generated/bundle")
+
+def stageBundle = tasks.register("stageBundle", StageBundleTask) {
+    webSources.from(repoWebDir)
+    dataSources.from(repoDataDir)
+    assetSources.from(repoAssetDir)
+    destinationDir.set(bundleDir)
 }
 
-tasks.configureEach { task ->
-    if (task.name.startsWith("merge") && task.name.endsWith("Assets")) {
-        task.dependsOn(stageBundle)
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        variant.sources.assets?.addGeneratedSourceDirectory(stageBundle) { it.destinationDir }
     }
 }
