@@ -32,7 +32,9 @@ object PythonRuntime {
         val sys = python.getModule("sys")
         sys.callAttr("setrecursionlimit", 20000)
 
-        val env = python.getModule("os").get("environ")
+        // get() 的返回类型是 PyObject?（Chaquopy 认为任意属性都可能不存在）。
+        // os.environ 在 CPython 里必然存在，这里用 !! 断言，避免整段变成可空链。
+        val env = python.getModule("os").get("environ")!!
         env.callAttr("__setitem__", "MAGIA_BUNDLE_ROOT", bundleDir.absolutePath)
         env.callAttr("__setitem__", "MAGIA_APP_DIR", appDir.absolutePath)
         env.callAttr("__setitem__", "MAGIA_ANDROID", "1")
